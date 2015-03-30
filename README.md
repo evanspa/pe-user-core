@@ -3,7 +3,7 @@
 [![Build Status](https://travis-ci.org/evanspa/pe-user-core.svg)](https://travis-ci.org/evanspa/pe-user-core)
 
 A Clojure library encapsulating an abstraction modeling a user and leveraging
-Datomic.
+Datomic.  Functionality exists to create users, lookup users and to authenticate users.
 
 ## Documentation
 
