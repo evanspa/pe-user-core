@@ -1,4 +1,4 @@
-(defproject pe-user-core "0.0.1"
+(defproject pe-user-core "0.0.2-SNAPSHOT"
   :description "A Clojure library encapsulating an abstraction modeling a user and leveraging Datomic."
   :url "https://github.com/evanspa/pe-user-core"
   :license {:name "MIT"
