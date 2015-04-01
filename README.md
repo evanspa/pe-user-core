@@ -5,6 +5,9 @@
 A Clojure library encapsulating an abstraction modeling a user and leveraging
 Datomic.  Functionality exists to create users, lookup users and to authenticate users.
 
+pe-user-core is part of the
+[pe-* Clojure Library Suite](#pe--clojure-library-suite).
+
 <!-- START doctoc generated TOC please keep comment here to allow auto update -->
 <!-- DON'T EDIT THIS SECTION, INSTEAD RE-RUN doctoc TO UPDATE -->
 **Table of Contents**
@@ -49,7 +52,7 @@ code that depends on the functionality of the pe-user-* libraries
   top of [Liberator](http://clojure-liberator.github.io/liberator/).
 + **[pe-user-rest](https://github.com/evanspa/pe-user-rest)**: provides a set of
   functions encapsulating an abstraction modeling a user within a REST API
-  and leveraging [Datomic](http://www.datomic.com)..
+  and leveraging [Datomic](http://www.datomic.com).
 + **[pe-apptxn-restsupport](https://github.com/evanspa/pe-apptxn-restsupport)**:
   provides a set of functions implementing the server-side REST layer of the
   PEAppTransaction Logging Framework.
