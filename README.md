@@ -50,6 +50,8 @@ code that depends on the functionality of the pe-user-* libraries
 + **[pe-rest-utils](https://github.com/evanspa/pe-rest-utils)**: provides a set
   of functions for building easy-to-version hypermedia REST services (built on
   top of [Liberator](http://clojure-liberator.github.io/liberator/).
++ **[pe-rest-testutils](https://github.com/evanspa/pe-rest-testutils)**: provides
+  a set of helper functions for unit testing web services.
 + **[pe-user-rest](https://github.com/evanspa/pe-user-rest)**: provides a set of
   functions encapsulating an abstraction modeling a user within a REST API
   and leveraging [Datomic](http://www.datomic.com).
