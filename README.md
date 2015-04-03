@@ -5,6 +5,8 @@
 A Clojure library encapsulating an abstraction modeling a user and leveraging
 Datomic.  Functionality exists to create users, lookup users and to authenticate users.
 
+This library is a good jumping-off point if you need to build a web application / service, and need to support the concept of user accounts; including user account creation, modification and authentication (both password and token-based).
+
 pe-user-core is part of the
 [pe-* Clojure Library Suite](#pe--clojure-library-suite).
 
