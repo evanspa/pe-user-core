@@ -39,7 +39,7 @@
 ;; Saving a user
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defn save-new-user-fn
+(defn save-new-user
   [db-spec new-id user]
   (let [validation-mask (val/save-new-user-validation-mask user)]
     (if (pos? (bit-and validation-mask val/snu-any-issues))
@@ -71,9 +71,9 @@
                     (throw e))))
               (throw e))))))))
 
-(defn save-user-fn
+(defn save-user
   ([db-spec id user]
-   (save-user-fn db-spec id nil user))
+   (save-user db-spec id nil user))
   ([db-spec id auth-token-id user]
    (let [password (:user/password user)]
      (j/update! db-spec

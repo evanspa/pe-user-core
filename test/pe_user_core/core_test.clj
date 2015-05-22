@@ -52,20 +52,20 @@
               new-id2 (core/next-user-account-id conn)
               t1 (t/now)
               t2 (t/now)]
-          (core/save-new-user-fn conn
-                                 new-id
-                                 {:user/username "smithj"
-                                  :user/email "smithj@test.com"
-                                  :user/name "John Smith"
-                                  :user/created-at t1
-                                  :user/password "insecure"})
-          (core/save-new-user-fn conn
-                                 new-id2
-                                 {:user/username "paulevans"
-                                  :user/email "p@p.com"
-                                  :user/name "Paul Evans"
-                                  :user/created-at t2
-                                  :user/password "insecure2"})
+          (core/save-new-user conn
+                              new-id
+                              {:user/username "smithj"
+                               :user/email "smithj@test.com"
+                               :user/name "John Smith"
+                               :user/created-at t1
+                               :user/password "insecure"})
+          (core/save-new-user conn
+                              new-id2
+                              {:user/username "paulevans"
+                               :user/email "p@p.com"
+                               :user/name "Paul Evans"
+                               :user/created-at t2
+                               :user/password "insecure2"})
           (let [[user-id user] (core/load-user-by-id conn new-id2)]
             (is (not (nil? user-id)))
             (is (not (nil? user)))
@@ -93,16 +93,16 @@
             (is (nil? (:user/deleted-at user)))
             (is (= t1 (:user/created-at user)))
             (is (= t1 (:user/updated-at user)))
-            (core/save-user-fn conn
-                               new-id
-                               (-> user
-                                   (dissoc :user/hashed-password)
-                                   (dissoc :user/created-at)
-                                   (assoc :user/updated-at t2)
-                                   (assoc :user/name "Johnny Smith")
-                                   (assoc :user/username "smithj2")
-                                   (assoc :user/password "insecure2")
-                                   (assoc :user/email "smithj@test.net")))
+            (core/save-user conn
+                            new-id
+                            (-> user
+                                (dissoc :user/hashed-password)
+                                (dissoc :user/created-at)
+                                (assoc :user/updated-at t2)
+                                (assoc :user/name "Johnny Smith")
+                                (assoc :user/username "smithj2")
+                                (assoc :user/password "insecure2")
+                                (assoc :user/email "smithj@test.net")))
             (let [[user-id user] (core/load-user-by-id conn new-id)
                   new-id2 (core/next-user-account-id conn)]
               (is (not (nil? user-id)))
@@ -122,14 +122,14 @@
                   [user-id user] (core/load-user-by-id conn new-id)
                   t3 (t/now)]
               (core/create-and-save-auth-token conn new-id new-token-id)
-              (core/save-user-fn conn
-                                 new-id
-                                 new-token-id
-                                 (-> user
-                                     (dissoc :user/hashed-password)
-                                     (dissoc :user/created-at)
-                                     (assoc :user/updated-at t3)
-                                     (assoc :user/name "Johnny R. Smith")))
+              (core/save-user conn
+                              new-id
+                              new-token-id
+                              (-> user
+                                  (dissoc :user/hashed-password)
+                                  (dissoc :user/created-at)
+                                  (assoc :user/updated-at t3)
+                                  (assoc :user/name "Johnny R. Smith")))
               (let [[user-id user] (core/load-user-by-id conn new-id)]
                 (is (not (nil? user-id)))
                 (is (not (nil? user)))
@@ -161,13 +161,13 @@
       (j/with-db-transaction [conn db-spec]
         (let [new-id (core/next-user-account-id conn)]
           (try
-            (core/save-new-user-fn conn
-                                   new-id
-                                   {:user/username "smithj2"
-                                    :user/email "smithj@test.biz"
-                                    :user/name "John Smith"
-                                    :user/created-at (t/now)
-                                    :user/password "insecure"})
+            (core/save-new-user conn
+                                new-id
+                                {:user/username "smithj2"
+                                 :user/email "smithj@test.biz"
+                                 :user/name "John Smith"
+                                 :user/created-at (t/now)
+                                 :user/password "insecure"})
             (is false "Should not have reached this")
             (catch IllegalArgumentException e
               (let [msg-mask (Long/parseLong (.getMessage e))]
@@ -181,13 +181,13 @@
       (j/with-db-transaction [conn db-spec]
         (let [new-id (core/next-user-account-id conn)]
           (try
-            (core/save-new-user-fn conn
-                                   new-id
-                                   {:user/username "smithjohn"
-                                    :user/email "smithj@test.net"
-                                    :user/name "John Smith"
-                                    :user/created-at (t/now)
-                                    :user/password "insecure"})
+            (core/save-new-user conn
+                                new-id
+                                {:user/username "smithjohn"
+                                 :user/email "smithj@test.net"
+                                 :user/name "John Smith"
+                                 :user/created-at (t/now)
+                                 :user/password "insecure"})
             (is false "Should not have reached this")
             (catch IllegalArgumentException e
               (let [msg-mask (Long/parseLong (.getMessage e))]
@@ -212,13 +212,13 @@
           new-token-id (core/next-auth-token-id db-spec)
           t1 (t/now)]
       (j/with-db-transaction [conn db-spec]
-        (core/save-new-user-fn conn
-                               new-id
-                               {:user/username "smithj"
-                                :user/email "smithj@test.com"
-                                :user/name "John Smith"
-                                :user/created-at t1
-                                :user/password "insecure"})
+        (core/save-new-user conn
+                            new-id
+                            {:user/username "smithj"
+                             :user/email "smithj@test.com"
+                             :user/name "John Smith"
+                             :user/created-at t1
+                             :user/password "insecure"})
         (let [plaintext-token (core/create-and-save-auth-token conn new-id new-token-id)]
           (is (and (not (nil? plaintext-token))
                    (not (empty? plaintext-token))))
@@ -289,13 +289,13 @@
     (let [new-id (core/next-user-account-id db-spec)
           t1 (t/now)]
       (j/with-db-transaction [conn db-spec]
-        (core/save-new-user-fn conn
-                               new-id
-                               {:user/username "smithj2"
-                                :user/email "smithj@test.com2"
-                                :user/name "John Smith2"
-                                :user/created-at t1
-                                :user/password "insecure2"})
+        (core/save-new-user conn
+                            new-id
+                            {:user/username "smithj2"
+                             :user/email "smithj@test.com2"
+                             :user/name "John Smith2"
+                             :user/created-at t1
+                             :user/password "insecure2"})
         (let [[user-id user] (core/authenticate-user-by-password conn "smithj@test.com2" "insecure2")]
           (is (not (nil? user-id)))
           (is (not (nil? user)))
@@ -315,13 +315,13 @@
     (let [new-id (core/next-user-account-id db-spec)
           t1 (t/now)]
       (j/with-db-transaction [conn db-spec]
-        (core/save-new-user-fn conn
-                               new-id
-                               {:user/username "smithj3"
-                                :user/email "smithj@test.com3"
-                                :user/name "John Smith3"
-                                :user/created-at t1
-                                :user/password "insecure3"})
+        (core/save-new-user conn
+                            new-id
+                            {:user/username "smithj3"
+                             :user/email "smithj@test.com3"
+                             :user/name "John Smith3"
+                             :user/created-at t1
+                             :user/password "insecure3"})
         (let [[user-id user] (core/authenticate-user-by-password conn "smithj3" "insecure3")]
           (is (not (nil? user-id)))
           (is (not (nil? user)))
@@ -345,13 +345,13 @@
         new-token-id (core/next-auth-token-id db-spec)
         t1 (t/now)]
     (j/with-db-transaction [conn db-spec]
-      (core/save-new-user-fn conn
-                             new-id
-                             {:user/username "smithj"
-                              :user/email "smithj@test.com"
-                              :user/name "John Smith"
-                              :user/created-at t1
-                              :user/password "insecure"})
+      (core/save-new-user conn
+                          new-id
+                          {:user/username "smithj"
+                           :user/email "smithj@test.com"
+                           :user/name "John Smith"
+                           :user/created-at t1
+                           :user/password "insecure"})
       (let [_ (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))
             plaintext-token (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))
             _ (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))
