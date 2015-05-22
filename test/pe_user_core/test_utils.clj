@@ -12,7 +12,7 @@
       :subname (if db-name
                  (str subname-prefix db-name)
                  subname-prefix)
-      :user (System/getenv "USER")})))
+      :user "postgres"})))
 
 (def db-spec-without-db (db-spec-fn nil))
 
