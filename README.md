@@ -3,7 +3,7 @@
 [![Build Status](https://travis-ci.org/evanspa/pe-user-core.svg)](https://travis-ci.org/evanspa/pe-user-core)
 
 A Clojure library encapsulating an abstraction modeling a user and leveraging
-Postgresql.  Functionality exists to create users, lookup users and to authenticate
+PostgreSQL.  Functionality exists to create users, lookup users and to authenticate
 users.
 
 This library is a good jumping-off point if you need to build an application
@@ -35,7 +35,7 @@ pe-user-core is available from Clojars.  Add the following dependency to your
 `project.clj` file:
 
 ```
-[pe-user-core "0.1.2"]
+[pe-user-core "0.1.3"]
 ```
 
 ## pe-* Clojure Library Suite
