@@ -3,34 +3,39 @@
             [clojure.string :as str]
             [clojure.pprint :refer (pprint)]
             [clojure.repl :refer :all]
+            [clojure.java.jdbc :as j]
             [clj-time.core :as t]
+            [clj-time.coerce :as c]
             [clojure.test :as test]
-            [datomic.api :as d]
             [clojure.stacktrace :refer (e)]
-            [datomic.api :refer [q db] :as d]
+            [pe-core-utils.core :as ucore]
+            [pe-user-core.validation :as val]
             [pe-user-core.core :as core]
-            [pe-datomic-utils.core :as ducore]
+            [pe-jdbc-utils.core :as jcore]
             [cemerick.friend.credentials :refer [hash-bcrypt bcrypt-verify]]
-            [pe-user-core.test-utils :refer [user-schema-files
-                                             db-uri
-                                             user-partition]]
+            [pe-user-core.test-utils :refer [db-spec-without-db
+                                             db-spec
+                                             db-spec-fn]]
+            [pe-user-core.ddl :as uddl]
             [clojure.tools.namespace.repl :refer (refresh refresh-all)]))
 
-(def conn (atom nil))
+(def dev-db-name "dev")
 
-(defn refresh-db
+(def db-spec-dev (db-spec-fn dev-db-name))
+
+(defn refresh-dev-db
   []
-  (reset! conn (ducore/refresh-db db-uri user-schema-files))
-  (ducore/transact-partition @conn user-partition))
-
-(defn save-new-authtoken
-  [conn u-entid expiration-date]
-  (let [[plaintext-token txnmap] (core/create-and-save-auth-token-txnmap user-partition
-                                                                         u-entid
-                                                                         expiration-date)
-        tx @(d/transact conn [txnmap])]
-    [plaintext-token (d/resolve-tempid (d/db conn) (:tempids tx) (:db/id txnmap))]))
-
-(defn save-new-user
-  [conn user]
-  (ducore/save-new-entity conn (core/save-new-user-txnmap user-partition user)))
+  (jcore/drop-database db-spec-without-db dev-db-name)
+  (jcore/create-database db-spec-without-db dev-db-name)
+  (j/db-do-commands db-spec-dev
+                    true
+                    uddl/schema-version-ddl
+                    uddl/v0-create-user-account-ddl
+                    uddl/v0-add-unique-constraint-user-account-email
+                    uddl/v0-add-unique-constraint-user-account-username
+                    uddl/v0-create-authentication-token-ddl
+                    uddl/v0-add-column-user-account-updated-w-auth-token)
+  (jcore/with-try-catch-exec-as-query db-spec-dev
+    (uddl/v0-create-updated-count-inc-trigger-function-fn db-spec-dev))
+  (jcore/with-try-catch-exec-as-query db-spec-dev
+    (uddl/v0-create-user-account-updated-count-trigger-fn db-spec-dev)))

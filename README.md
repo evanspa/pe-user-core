@@ -3,9 +3,15 @@
 [![Build Status](https://travis-ci.org/evanspa/pe-user-core.svg)](https://travis-ci.org/evanspa/pe-user-core)
 
 A Clojure library encapsulating an abstraction modeling a user and leveraging
-Datomic.  Functionality exists to create users, lookup users and to authenticate users.
+Postgresql.  Functionality exists to create users, lookup users and to authenticate
+users.
 
-This library is a good jumping-off point if you need to build an application that needs to support the concept of user accounts; including user account creation, modification and authentication (both password and token-based).  If your need is to build such an application as a web app or web service, take a look at [pe-user-rest](https://github.com/evanspa/pe-user-rest), which exposes the functionality of this library as a REST API.
+This library is a good jumping-off point if you need to build an application
+that needs to support the concept of user accounts; including user account
+creation, modification and authentication (both password and token-based).  If
+your need is to build such an application as a web app or web service, take a
+look at [pe-user-rest](https://github.com/evanspa/pe-user-rest), which exposes
+the functionality of this library as a REST API.
 
 pe-user-core is part of the
 [pe-* Clojure Library Suite](#pe--clojure-library-suite).
@@ -29,7 +35,7 @@ pe-user-core is available from Clojars.  Add the following dependency to your
 `project.clj` file:
 
 ```
-[pe-user-core "0.0.1"]
+[pe-user-core "0.1.0"]
 ```
 
 ## pe-* Clojure Library Suite

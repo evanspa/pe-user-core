@@ -1,9 +1,19 @@
-(ns pe-user-core.test-utils
-  (:require [datomic.api :as d]
-            [clojure.java.io :refer [resource]]))
+(ns pe-user-core.test-utils)
 
-(def user-schema-files ["user-schema-updates-0.0.1.dtm"])
+(def db-name "test_db")
 
-(def db-uri "datomic:mem://user")
+(defn db-spec-fn
+  ([]
+   (db-spec-fn nil))
+  ([db-name]
+   (let [subname-prefix "//localhost:5432/"]
+     {:classname "org.postgresql.Driver"
+      :subprotocol "postgresql"
+      :subname (if db-name
+                 (str subname-prefix db-name)
+                 subname-prefix)
+      :user (System/getenv "USER")})))
 
-(def user-partition :user)
+(def db-spec-without-db (db-spec-fn nil))
+
+(def db-spec (db-spec-fn db-name))

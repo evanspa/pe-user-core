@@ -1,0 +1,42 @@
+<!-- Logback configuration. See http://logback.qos.ch/manual/index.html -->
+<configuration scan="false" debug="true">
+
+  <appender name="UCORE-FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <!-- encoder defaults to ch.qos.logback.classic.encoder.PatternLayoutEncoder -->
+    <encoder><pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern></encoder>
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <!-- rollover daily -->
+      <fileNamePattern>${UCORE_LOGS_DIR}/ucore-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+      <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+        <maxFileSize>64 MB</maxFileSize>
+      </timeBasedFileNamingAndTriggeringPolicy>
+    </rollingPolicy>
+    <!-- "true" to safely log to the same file from multiple JVMs. Degrades performance! -->
+    <prudent>false</prudent>
+  </appender>
+
+  <appender name="CATCHALL-FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <encoder><pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern></encoder>
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <fileNamePattern>${UCORE_LOGS_DIR}/catchall-%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+      <timeBasedFileNamingAndTriggeringPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedFNATP">
+        <maxFileSize>64 MB</maxFileSize>
+      </timeBasedFileNamingAndTriggeringPolicy>
+    </rollingPolicy>
+    <prudent>false</prudent>
+  </appender>
+
+  <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+    <encoder><pattern>%-5level %logger{36} - %msg%n</pattern></encoder>
+  </appender>
+
+  <root level="DEBUG">
+    <appender-ref ref="CATCHALL-FILE" />
+    <appender-ref ref="STDOUT" />
+  </root>
+
+  <logger name="pe-user-core" level="DEBUG">
+    <appender-ref ref="UCORE-FILE" />
+    <appender-ref ref="STDOUT" />
+  </logger>
+</configuration>
