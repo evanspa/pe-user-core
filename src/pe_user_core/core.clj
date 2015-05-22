@@ -40,57 +40,55 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (defn save-new-user-fn
-  [new-id user]
+  [db-spec new-id user]
   (let [validation-mask (val/save-new-user-validation-mask user)]
     (if (pos? (bit-and validation-mask val/snu-any-issues))
       (throw (IllegalArgumentException. (str validation-mask)))
-      (fn [db-spec]
-        (let [password (:user/password user)
-              created-at (c/to-timestamp (:user/created-at user))]
-          (try
-            (j/insert! db-spec
-                       :user_account
-                       {:id new-id
-                        :name (:user/name user)
-                        :email (:user/email user)
-                        :username (:user/username user)
-                        :created_at created-at
-                        :updated_at created-at
-                        :updated_count 1
-                        :hashed_password (hash-bcrypt (:user/password user))})
-            (catch java.sql.SQLException e
-              (if (jcore/uniq-constraint-violated? db-spec e)
-                (let [ucv (jcore/uniq-constraint-violated db-spec e)]
-                  (if (= ucv uddl/constr-user-account-uniq-email)
+      (let [password (:user/password user)
+            created-at (c/to-timestamp (:user/created-at user))]
+        (try
+          (j/insert! db-spec
+                     :user_account
+                     {:id new-id
+                      :name (:user/name user)
+                      :email (:user/email user)
+                      :username (:user/username user)
+                      :created_at created-at
+                      :updated_at created-at
+                      :updated_count 1
+                      :hashed_password (hash-bcrypt (:user/password user))})
+          (catch java.sql.SQLException e
+            (if (jcore/uniq-constraint-violated? db-spec e)
+              (let [ucv (jcore/uniq-constraint-violated db-spec e)]
+                (if (= ucv uddl/constr-user-account-uniq-email)
+                  (throw (IllegalArgumentException. (str (bit-or 0
+                                                                 val/snu-email-already-registered
+                                                                 val/snu-any-issues))))
+                  (if (= ucv uddl/constr-user-account-uniq-username)
                     (throw (IllegalArgumentException. (str (bit-or 0
-                                                                   val/snu-email-already-registered
+                                                                   val/snu-username-already-registered
                                                                    val/snu-any-issues))))
-                    (if (= ucv uddl/constr-user-account-uniq-username)
-                      (throw (IllegalArgumentException. (str (bit-or 0
-                                                                     val/snu-username-already-registered
-                                                                     val/snu-any-issues))))
-                      (throw e))))
-                (throw e)))))))))
+                    (throw e))))
+              (throw e))))))))
 
 (defn save-user-fn
-  ([id user]
-   (save-user-fn id nil user))
-  ([id auth-token-id user]
-   (fn [db-spec]
-     (let [password (:user/password user)]
-       (j/update! db-spec
-                  :user_account
-                  (-> user
-                      (dissoc :updated_count)
-                      (assoc :updated_w_auth_tkn_id auth-token-id)
-                      (ucore/replace-if-contains :user/updated-at :updated_at c/to-timestamp)
-                      (ucore/replace-if-contains :user/deleted-at :deleted_at c/to-timestamp)
-                      (ucore/replace-if-contains :user/verified-at :verified_at c/to-timestamp)
-                      (ucore/replace-if-contains :user/name :name)
-                      (ucore/replace-if-contains :user/email :email)
-                      (ucore/replace-if-contains :user/username :username)
-                      (ucore/replace-if-contains :user/password :hashed_password hash-bcrypt))
-                  ["id = ?" id])))))
+  ([db-spec id user]
+   (save-user-fn db-spec id nil user))
+  ([db-spec id auth-token-id user]
+   (let [password (:user/password user)]
+     (j/update! db-spec
+                :user_account
+                (-> user
+                    (dissoc :updated_count)
+                    (assoc :updated_w_auth_tkn_id auth-token-id)
+                    (ucore/replace-if-contains :user/updated-at :updated_at c/to-timestamp)
+                    (ucore/replace-if-contains :user/deleted-at :deleted_at c/to-timestamp)
+                    (ucore/replace-if-contains :user/verified-at :verified_at c/to-timestamp)
+                    (ucore/replace-if-contains :user/name :name)
+                    (ucore/replace-if-contains :user/email :email)
+                    (ucore/replace-if-contains :user/username :username)
+                    (ucore/replace-if-contains :user/password :hashed_password hash-bcrypt))
+                ["id = ?" id]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Loading a user
