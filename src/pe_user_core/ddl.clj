@@ -30,8 +30,8 @@
   (str (format "CREATE TABLE IF NOT EXISTS %s (" tbl-user-account)
        "id              serial      PRIMARY KEY, "
        "name            text        NULL, "
-       "email           text        NOT NULL, "
-       "username        text        NOT NULL, "
+       "email           text        NULL, "
+       "username        text        NULL, "
        "hashed_password text        NOT NULL, "
        "created_at      timestamptz NOT NULL, "
        "verified_at     timestamptz NULL, "

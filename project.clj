@@ -18,7 +18,7 @@
                  [com.cemerick/friend "0.2.1"]]
   :resource-paths ["resources"]
   :codox {:exclude [user]
-          :src-dir-uri "https://github.com/evanspa/pe-user-core/blob/0.1.5/"
+          :src-dir-uri "https://github.com/evanspa/pe-user-core/blob/0.1.6/"
           :src-linenum-anchor-prefix "L"}
   :profiles {:dev {:source-paths ["dev"]  ;ensures 'user.clj' gets auto-loaded
                    :plugins [[cider/cider-nrepl "0.9.0-SNAPSHOT"]]
