@@ -35,7 +35,7 @@ pe-user-core is available from Clojars.  Add the following dependency to your
 `project.clj` file:
 
 ```
-[pe-user-core "0.1.7"]
+[pe-user-core "0.1.8"]
 ```
 
 ## pe-* Clojure Library Suite
@@ -59,7 +59,7 @@ code that depends on the functionality of the pe-user-* libraries
   PEAppTransaction Logging Framework.
 + **[pe-rest-utils](https://github.com/evanspa/pe-rest-utils)**: provides a set
   of functions for building easy-to-version hypermedia REST services (built on
-  top of [Liberator](http://clojure-liberator.github.io/liberator/).
+  top of [Liberator](http://clojure-liberator.github.io/liberator/)).
 + **[pe-rest-testutils](https://github.com/evanspa/pe-rest-testutils)**: provides
   a set of helper functions for unit testing web services.
 + **[pe-user-rest](https://github.com/evanspa/pe-user-rest)**: provides a set of
