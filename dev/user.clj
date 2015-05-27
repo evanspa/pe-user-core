@@ -33,8 +33,7 @@
                     uddl/v0-create-user-account-ddl
                     uddl/v0-add-unique-constraint-user-account-email
                     uddl/v0-add-unique-constraint-user-account-username
-                    uddl/v0-create-authentication-token-ddl
-                    uddl/v0-add-column-user-account-updated-w-auth-token)
+                    uddl/v0-create-authentication-token-ddl)
   (jcore/with-try-catch-exec-as-query db-spec-dev
     (uddl/v0-create-updated-count-inc-trigger-function-fn db-spec-dev))
   (jcore/with-try-catch-exec-as-query db-spec-dev

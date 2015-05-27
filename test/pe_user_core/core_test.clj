@@ -1,6 +1,5 @@
 (ns pe-user-core.core-test
   (:require [clojure.test :refer :all]
-            [clojure.pprint :refer [pprint]]
             [clojure.java.jdbc :as j]
             [pe-jdbc-utils.core :as jcore]
             [pe-user-core.core :as core]
@@ -10,9 +9,7 @@
                                              db-spec
                                              db-name]]
             [pe-core-utils.core :as ucore]
-            [clojure.java.io :refer [resource]]
             [clojure.tools.logging :as log]
-            [clojure.data.json :as json]
             [clj-time.core :as t]
             [clj-time.coerce :as c]
             [cemerick.friend.credentials :refer [hash-bcrypt bcrypt-verify]]))
@@ -29,8 +26,7 @@
                                         uddl/v0-create-user-account-ddl
                                         uddl/v0-add-unique-constraint-user-account-email
                                         uddl/v0-add-unique-constraint-user-account-username
-                                        uddl/v0-create-authentication-token-ddl
-                                        uddl/v0-add-column-user-account-updated-w-auth-token)
+                                        uddl/v0-create-authentication-token-ddl)
                       (jcore/with-try-catch-exec-as-query db-spec
                         (uddl/v0-create-updated-count-inc-trigger-function-fn db-spec))
                       (jcore/with-try-catch-exec-as-query db-spec
@@ -73,7 +69,7 @@
             (is (= "paulevans" (:user/username user)))
             (is (= "Paul Evans" (:user/name user)))
             (is (= new-id2 (:user/id user)))
-            (is (= 1 (:updated_count user)))
+            (is (= 1 (:user/updated-count user)))
             (is (= "p@p.com" (:user/email user)))
             (is (not (nil? (:user/hashed-password user))))
             (is (nil? (:user/deleted-at user)))
@@ -87,7 +83,7 @@
             (is (= "smithj" (:user/username user)))
             (is (= "John Smith" (:user/name user)))
             (is (= new-id (:user/id user)))
-            (is (= 1 (:updated_count user)))
+            (is (= 1 (:user/updated-count user)))
             (is (= "smithj@test.com" (:user/email user)))
             (is (not (nil? (:user/hashed-password user))))
             (is (nil? (:user/deleted-at user)))
@@ -111,9 +107,8 @@
               (is (= "smithj2" (:user/username user)))
               (is (= "Johnny Smith" (:user/name user)))
               (is (= new-id (:user/id user)))
-              (is (= 2 (:updated_count user)))
+              (is (= 2 (:user/updated-count user)))
               (is (= "smithj@test.net" (:user/email user)))
-              (is (nil? (:updated_w_auth_tkn_id user)))
               (is (not (nil? (:user/hashed-password user))))
               (is (nil? (:user/deleted-at user)))
               (is (= t1 (:user/created-at user)))
@@ -136,8 +131,7 @@
                 (is (= new-id user-id))
                 (is (= "Johnny R. Smith" (:user/name user)))
                 (is (= new-id (:user/id user)))
-                (is (= 3 (:updated_count user)))
-                (is (= new-token-id (:updated_w_auth_tkn_id user)))
+                (is (= 3 (:user/updated-count user)))
                 (is (not (nil? (:user/hashed-password user))))
                 (is (nil? (:user/deleted-at user)))
                 (is (= t1 (:user/created-at user)))
@@ -151,7 +145,7 @@
             (is (= "paulevans" (:user/username user)))
             (is (= "Paul Evans" (:user/name user)))
             (is (= new-id2 (:user/id user)))
-            (is (= 1 (:updated_count user)))
+            (is (= 1 (:user/updated-count user)))
             (is (= "p@p.com" (:user/email user)))
             (is (not (nil? (:user/hashed-password user))))
             (is (nil? (:user/deleted-at user)))
@@ -226,7 +220,7 @@
             (is (not (nil? user-id)))
             (is (not (nil? user)))
             (is (= new-id user-id))
-            (is (= 1 (:updated_count user)))
+            (is (= 1 (:user/updated-count user)))
             (is (= "smithj" (:user/username user)))
             (is (= "John Smith" (:user/name user)))
             (is (= new-id (:user/id user)))
@@ -261,12 +255,7 @@
               plaintext-token (core/create-and-save-auth-token conn
                                                                new-id
                                                                new-token-id
-                                                               t1
-                                                               "Samsung"
-                                                               "Galaxy S6"
-                                                               core/uados-android
-                                                               "5.0"
-                                                               "Mozilla/5.0 (Windows NT 6.3; rv:36.0) Gecko/20100101 Firefox/36.0")]
+                                                               t1)]
           (let [token-rs (j/query conn
                                   [(format "SELECT * from %s where id = ?" uddl/tbl-auth-token) new-token-id]
                                   :result-set-fn first)]
@@ -276,12 +265,6 @@
             (is (nil? (:invalidated_at token-rs)))
             (is (nil? (:invalidated_reason token-rs)))
             (is (= t1 (c/from-sql-time (:expires_at token-rs))))
-            (is (= "Samsung" (:user_agent_device_manu token-rs)))
-            (is (= "Galaxy S6" (:user_agent_device_model token-rs)))
-            (is (= core/uados-android (:user_agent_device_os token-rs)))
-            (is (= "5.0" (:user_agent_device_os_ver token-rs)))
-            (is (= "Mozilla/5.0 (Windows NT 6.3; rv:36.0) Gecko/20100101 Firefox/36.0"
-                   (:browser_user_agent token-rs)))
             ; plaintext-token should be expired at this point
             (let [user-result (core/load-user-by-authtoken conn new-id plaintext-token)]
               (is (nil? user-result))))))))
@@ -303,7 +286,7 @@
           (is (= "smithj2" (:user/username user)))
           (is (= "John Smith2" (:user/name user)))
           (is (= new-id (:user/id user)))
-          (is (= 1 (:updated_count user)))
+          (is (= 1 (:user/updated-count user)))
           (is (= "smithj@test.com2" (:user/email user)))
           (is (not (nil? (:user/hashed-password user))))
           (is (nil? (:user/deleted-at user)))

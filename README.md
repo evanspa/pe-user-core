@@ -35,7 +35,7 @@ pe-user-core is available from Clojars.  Add the following dependency to your
 `project.clj` file:
 
 ```
-[pe-user-core "0.1.6"]
+[pe-user-core "0.1.7"]
 ```
 
 ## pe-* Clojure Library Suite
@@ -63,8 +63,7 @@ code that depends on the functionality of the pe-user-* libraries
 + **[pe-rest-testutils](https://github.com/evanspa/pe-rest-testutils)**: provides
   a set of helper functions for unit testing web services.
 + **[pe-user-rest](https://github.com/evanspa/pe-user-rest)**: provides a set of
-  functions encapsulating an abstraction modeling a user within a REST API
-  and leveraging [Datomic](http://www.datomic.com).
+  functions encapsulating an abstraction modeling a user within a REST API.
 + **[pe-apptxn-restsupport](https://github.com/evanspa/pe-apptxn-restsupport)**:
   provides a set of functions implementing the server-side REST layer of the
   PEAppTransaction Logging Framework.

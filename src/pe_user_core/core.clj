@@ -29,6 +29,7 @@
                        (ucore/replace-if-contains :email :user/email)
                        (ucore/replace-if-contains :username :user/username)
                        (ucore/replace-if-contains :id :user/id)
+                       (ucore/replace-if-contains :updated_count :user/updated-count)
                        (ucore/replace-if-contains :hashed_password :user/hashed-password)
                        (ucore/replace-if-contains :updated_at :user/updated-at from-sql-time-fn)
                        (ucore/replace-if-contains :deleted_at :user/deleted-at from-sql-time-fn)
@@ -80,7 +81,7 @@
                 :user_account
                 (-> user
                     (dissoc :updated_count)
-                    (assoc :updated_w_auth_tkn_id auth-token-id)
+                    (dissoc :user/updated-count)
                     (ucore/replace-if-contains :user/updated-at :updated_at c/to-timestamp)
                     (ucore/replace-if-contains :user/deleted-at :deleted_at c/to-timestamp)
                     (ucore/replace-if-contains :user/verified-at :verified_at c/to-timestamp)
@@ -176,40 +177,11 @@
                                new-id
                                nil))
   ([db-spec user-id new-id exp-date]
-   (create-and-save-auth-token db-spec
-                               user-id
-                               new-id
-                               exp-date
-                               nil))
-  ([db-spec user-id new-id exp-date browser-ua]
-   (create-and-save-auth-token db-spec
-                               user-id
-                               new-id
-                               exp-date
-                               nil
-                               nil
-                               nil
-                               nil
-                               browser-ua))
-  ([db-spec
-    user-id
-    new-id
-    exp-date
-    uad-manu
-    uad-model
-    uad-os
-    uad-os-ver
-    browser-ua]
    (let [uuid (str (java.util.UUID/randomUUID))]
      (j/insert! db-spec
                 :authentication_token
                 {:id new-id
                  :user_id user-id
-                 :user_agent_device_manu uad-manu
-                 :user_agent_device_model uad-model
-                 :user_agent_device_os uad-os
-                 :user_agent_device_os_ver uad-os-ver
-                 :browser_user_agent browser-ua
                  :hashed_token (hash-bcrypt uuid)
                  :created_at (c/to-timestamp (t/now))
                  :expires_at (c/to-timestamp exp-date)})

@@ -67,18 +67,8 @@
   (str (format "CREATE TABLE IF NOT EXISTS %s (" tbl-auth-token)
        "id                       serial      PRIMARY KEY, "
        (format "user_id          integer     NOT NULL REFERENCES %s (id), " tbl-user-account)
-       "user_agent_device_manu   text        NULL, "
-       "user_agent_device_model  text        NULL, "
-       "user_agent_device_os     integer     NULL, "
-       "user_agent_device_os_ver text        NULL, "
-       "browser_user_agent       text        NULL,"
        "hashed_token             text        UNIQUE NOT NULL, "
        "created_at               timestamptz NOT NULL, "
        "invalidated_at           timestamptz NULL, "
        "invalidated_reason       integer     NULL, "
        "expires_at               timestamptz NULL)"))
-
-(def v0-add-column-user-account-updated-w-auth-token
-  (format "ALTER TABLE %s ADD COLUMN updated_w_auth_tkn_id integer NULL REFERENCES %s (id)"
-          tbl-user-account
-          tbl-auth-token))
