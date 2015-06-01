@@ -79,16 +79,12 @@
    (let [password (:user/password user)]
      (j/update! db-spec
                 :user_account
-                (-> user
-                    (dissoc :updated_count)
-                    (dissoc :user/updated-count)
-                    (ucore/replace-if-contains :user/updated-at :updated_at c/to-timestamp)
-                    (ucore/replace-if-contains :user/deleted-at :deleted_at c/to-timestamp)
-                    (ucore/replace-if-contains :user/verified-at :verified_at c/to-timestamp)
-                    (ucore/replace-if-contains :user/name :name)
-                    (ucore/replace-if-contains :user/email :email)
-                    (ucore/replace-if-contains :user/username :username)
-                    (ucore/replace-if-contains :user/password :hashed_password hash-bcrypt))
+                (-> {}
+                    (ucore/assoc-if-contains user :user/updated-at :updated_at c/to-timestamp)
+                    (ucore/assoc-if-contains user :user/name :name)
+                    (ucore/assoc-if-contains user :user/email :email)
+                    (ucore/assoc-if-contains user :user/username :username)
+                    (ucore/assoc-if-contains user :user/password :hashed_password hash-bcrypt))
                 ["id = ?" id]))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
