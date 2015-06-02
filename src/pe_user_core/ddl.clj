@@ -5,6 +5,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Table Names
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(def tbl-schema-version "schema_version")
 (def tbl-user-account "user_account")
 (def tbl-auth-token   "authentication_token")
 
@@ -23,8 +24,8 @@
 ;; DDL vars
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (def schema-version-ddl
-  (str "CREATE TABLE IF NOT EXISTS schema_version ("
-       "schema_version integer PRIMARY KEY)"))
+  (format "CREATE TABLE IF NOT EXISTS %s (schema_version integer PRIMARY KEY)"
+          tbl-schema-version))
 
 (def v0-create-user-account-ddl
   (str (format "CREATE TABLE IF NOT EXISTS %s (" tbl-user-account)

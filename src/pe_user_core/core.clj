@@ -36,6 +36,20 @@
                        (ucore/replace-if-contains :verified_at :user/verified-at from-sql-time-fn)
                        (ucore/replace-if-contains :created_at :user/created-at from-sql-time-fn))]))
 
+(defn get-schema-version
+  [db-spec]
+  (let [rs (j/query db-spec
+                    [(format "select schema_version from %s" uddl/tbl-schema-version)]
+                    :result-set-fn first)]
+    (when rs
+      (:schema_version rs))))
+
+(defn set-schema-version
+  [db-spec schema-version]
+  (j/with-db-transaction [conn db-spec]
+    (j/delete! conn :schema_version [])
+    (j/insert! conn :schema_version {:schema_version schema-version})))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Saving a user
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -142,23 +156,12 @@
                             user-id
                             (c/to-timestamp (t/now))]
                            :row-fn :hashed_token)]
-    (if (some #(bcrypt-verify plaintext-authtoken %) tokens-rs)
-      (load-user-by-id db-spec user-id)
-      nil)))
+    (when (some #(bcrypt-verify plaintext-authtoken %) tokens-rs)
+      (load-user-by-id db-spec user-id))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Authentication-related
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(def uados-ios             0)
-(def uados-android         1)
-(def uados-cyanogenmod     2)
-(def uados-firefox-os      3)
-(def uados-windows         4)
-(def uados-blackberry      5)
-(def uados-sailfish-os     6)
-(def uados-ubuntu-touch-os 7)
-(def uados-amazon-fire-os  8)
 
 (def invalrsn-logout                0)
 (def invalrsn-account-closed        1)
