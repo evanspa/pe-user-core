@@ -3,11 +3,10 @@
 
 (def snu-any-issues                      (bit-shift-left 1 0))
 (def snu-invalid-email                   (bit-shift-left 1 1))
-(def snu-created-at-not-provided         (bit-shift-left 1 2))
-(def snu-username-and-email-not-provided (bit-shift-left 1 3))
-(def snu-password-not-provided           (bit-shift-left 1 4))
-(def snu-email-already-registered        (bit-shift-left 1 5))
-(def snu-username-already-registered     (bit-shift-left 1 6))
+(def snu-username-and-email-not-provided (bit-shift-left 1 2))
+(def snu-password-not-provided           (bit-shift-left 1 3))
+(def snu-email-already-registered        (bit-shift-left 1 4))
+(def snu-username-already-registered     (bit-shift-left 1 5))
 
 (def ^:private email-regex
   #"[a-zA-Z0-9[!#$%&'()*+,/\-_\.\"]]+@[a-zA-Z0-9[!#$%&'()*+,/\-_\"]]+\.[a-zA-Z0-9[!#$%&'()*+,/\-_\"\.]]+")
@@ -17,14 +16,10 @@
        (not (nil? (re-find email-regex email)))))
 
 (defn save-new-user-validation-mask
-  [{created-at :user/created-at
-    email :user/email
+  [{email :user/email
     username :user/username
     password :user/password}]
   (-> 0
-      (ucore/add-condition #(nil? created-at)
-                           snu-created-at-not-provided
-                           snu-any-issues)
       (ucore/add-condition #(and (empty? email)
                                  (empty? username))
                            snu-username-and-email-not-provided

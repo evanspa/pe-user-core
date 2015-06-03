@@ -60,7 +60,7 @@
     (if (pos? (bit-and validation-mask val/snu-any-issues))
       (throw (IllegalArgumentException. (str validation-mask)))
       (let [password (:user/password user)
-            created-at (c/to-timestamp (:user/created-at user))]
+            created-at (c/to-timestamp (t/now))]
         (try
           (j/insert! db-spec
                      :user_account
@@ -90,11 +90,11 @@
   ([db-spec id user]
    (save-user db-spec id nil user))
   ([db-spec id auth-token-id user]
-   (let [password (:user/password user)]
+   (let [password (:user/password user)
+         updated-at (c/to-timestamp (t/now))]
      (j/update! db-spec
                 :user_account
-                (-> {}
-                    (ucore/assoc-if-contains user :user/updated-at :updated_at c/to-timestamp)
+                (-> {:updated_at updated-at}
                     (ucore/assoc-if-contains user :user/name :name)
                     (ucore/assoc-if-contains user :user/email :email)
                     (ucore/assoc-if-contains user :user/username :username)

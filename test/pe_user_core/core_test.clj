@@ -45,22 +45,18 @@
     (testing "Updating (and then re-loading) the user"
       (j/with-db-transaction [conn db-spec]
         (let [new-id (core/next-user-account-id conn)
-              new-id2 (core/next-user-account-id conn)
-              t1 (t/now)
-              t2 (t/now)]
+              new-id2 (core/next-user-account-id conn)]
           (core/save-new-user conn
                               new-id
                               {:user/username "smithj"
                                :user/email "smithj@test.com"
                                :user/name "John Smith"
-                               :user/created-at t1
                                :user/password "insecure"})
           (core/save-new-user conn
                               new-id2
                               {:user/username "paulevans"
                                :user/email "p@p.com"
                                :user/name "Paul Evans"
-                               :user/created-at t2
                                :user/password "insecure2"})
           (let [[user-id user] (core/load-user-by-id conn new-id2)]
             (is (not (nil? user-id)))
@@ -73,8 +69,8 @@
             (is (= "p@p.com" (:user/email user)))
             (is (not (nil? (:user/hashed-password user))))
             (is (nil? (:user/deleted-at user)))
-            (is (= t2 (:user/created-at user)))
-            (is (= t2 (:user/updated-at user))))
+            (is (not (nil? (:user/created-at user))))
+            (is (not (nil? (:user/updated-at user)))))
           (let [[user-id user] (core/load-user-by-id conn new-id)
                 t2 (t/now)]
             (is (not (nil? user-id)))
@@ -87,14 +83,11 @@
             (is (= "smithj@test.com" (:user/email user)))
             (is (not (nil? (:user/hashed-password user))))
             (is (nil? (:user/deleted-at user)))
-            (is (= t1 (:user/created-at user)))
-            (is (= t1 (:user/updated-at user)))
+            (is (not (nil? (:user/created-at user))))
+            (is (not (nil? (:user/updated-at user))))
             (core/save-user conn
                             new-id
                             (-> user
-                                (dissoc :user/hashed-password)
-                                (dissoc :user/created-at)
-                                (assoc :user/updated-at t2)
                                 (assoc :user/name "Johnny Smith")
                                 (assoc :user/username "smithj2")
                                 (assoc :user/password "insecure2")
@@ -111,8 +104,8 @@
               (is (= "smithj@test.net" (:user/email user)))
               (is (not (nil? (:user/hashed-password user))))
               (is (nil? (:user/deleted-at user)))
-              (is (= t1 (:user/created-at user)))
-              (is (= t2 (:user/updated-at user))))
+              (is (not (nil? (:user/created-at user))))
+              (is (not (nil? (:user/updated-at user)))))
             (let [new-token-id (core/next-auth-token-id conn)
                   [user-id user] (core/load-user-by-id conn new-id)
                   t3 (t/now)]
@@ -121,9 +114,6 @@
                               new-id
                               new-token-id
                               (-> user
-                                  (dissoc :user/hashed-password)
-                                  (dissoc :user/created-at)
-                                  (assoc :user/updated-at t3)
                                   (assoc :user/name "Johnny R. Smith")))
               (let [[user-id user] (core/load-user-by-id conn new-id)]
                 (is (not (nil? user-id)))
@@ -134,8 +124,8 @@
                 (is (= 3 (:user/updated-count user)))
                 (is (not (nil? (:user/hashed-password user))))
                 (is (nil? (:user/deleted-at user)))
-                (is (= t1 (:user/created-at user)))
-                (is (= t3 (:user/updated-at user))))))
+                (is (not (nil? (:user/created-at user))))
+                (is (not (nil? (:user/updated-at user)))))))
           ; just want to make sure the updated_count didn't get impacted
           ; when saving 'john smith' user
           (let [[user-id user] (core/load-user-by-id conn new-id2)]
@@ -149,8 +139,8 @@
             (is (= "p@p.com" (:user/email user)))
             (is (not (nil? (:user/hashed-password user))))
             (is (nil? (:user/deleted-at user)))
-            (is (= t2 (:user/created-at user)))
-            (is (= t2 (:user/updated-at user)))))))
+            (is (not (nil? (:user/created-at user))))
+            (is (not (nil? (:user/updated-at user))))))))
     (testing "Attempting to save a new user with a duplicate username"
       (j/with-db-transaction [conn db-spec]
         (let [new-id (core/next-user-account-id conn)]
@@ -160,7 +150,6 @@
                                 {:user/username "smithj2"
                                  :user/email "smithj@test.biz"
                                  :user/name "John Smith"
-                                 :user/created-at (t/now)
                                  :user/password "insecure"})
             (is false "Should not have reached this")
             (catch IllegalArgumentException e
@@ -168,7 +157,6 @@
                 (is (pos? (bit-and msg-mask val/snu-any-issues)))
                 (is (pos? (bit-and msg-mask val/snu-username-already-registered)))
                 (is (zero? (bit-and msg-mask val/snu-invalid-email)))
-                (is (zero? (bit-and msg-mask val/snu-created-at-not-provided)))
                 (is (zero? (bit-and msg-mask val/snu-password-not-provided)))
                 (is (zero? (bit-and msg-mask val/snu-email-already-registered)))))))))
     (testing "Attempting to save a new user with a duplicate email address"
@@ -180,7 +168,6 @@
                                 {:user/username "smithjohn"
                                  :user/email "smithj@test.net"
                                  :user/name "John Smith"
-                                 :user/created-at (t/now)
                                  :user/password "insecure"})
             (is false "Should not have reached this")
             (catch IllegalArgumentException e
@@ -188,7 +175,6 @@
                 (is (pos? (bit-and msg-mask val/snu-any-issues)))
                 (is (pos? (bit-and msg-mask val/snu-email-already-registered)))
                 (is (zero? (bit-and msg-mask val/snu-invalid-email)))
-                (is (zero? (bit-and msg-mask val/snu-created-at-not-provided)))
                 (is (zero? (bit-and msg-mask val/snu-password-not-provided)))
                 (is (zero? (bit-and msg-mask val/snu-username-already-registered)))))))))
     (testing "Attempt to load a non-existent user"
@@ -211,7 +197,6 @@
                             {:user/username "smithj"
                              :user/email "smithj@test.com"
                              :user/name "John Smith"
-                             :user/created-at t1
                              :user/password "insecure"})
         (let [plaintext-token (core/create-and-save-auth-token conn new-id new-token-id)]
           (is (and (not (nil? plaintext-token))
@@ -227,8 +212,8 @@
             (is (= "smithj@test.com" (:user/email user)))
             (is (not (nil? (:user/hashed-password user))))
             (is (nil? (:user/deleted-at user)))
-            (is (= t1 (:user/created-at user)))
-            (is (= t1 (:user/updated-at user))))
+            (is (not (nil? (:user/created-at user))))
+            (is (not (nil? (:user/updated-at user)))))
           (let [user-tokens (core/load-authtokens-by-user-id conn new-id)]
             (is (not (nil? user-tokens)))
             (is (= 1 (count user-tokens))))
@@ -277,7 +262,6 @@
                             {:user/username "smithj2"
                              :user/email "smithj@test.com2"
                              :user/name "John Smith2"
-                             :user/created-at t1
                              :user/password "insecure2"})
         (let [[user-id user] (core/authenticate-user-by-password conn "smithj@test.com2" "insecure2")]
           (is (not (nil? user-id)))
@@ -290,8 +274,8 @@
           (is (= "smithj@test.com2" (:user/email user)))
           (is (not (nil? (:user/hashed-password user))))
           (is (nil? (:user/deleted-at user)))
-          (is (= t1 (:user/created-at user)))
-          (is (= t1 (:user/updated-at user))))
+          (is (not (nil? (:user/created-at user))))
+          (is (not (nil? (:user/updated-at user)))))
         (let [result (core/authenticate-user-by-password conn "smithj@test.com2" "wrong")]
           (is (nil? result))))))
   (testing "Authenticate by username and password"
@@ -303,7 +287,6 @@
                             {:user/username "smithj3"
                              :user/email "smithj@test.com3"
                              :user/name "John Smith3"
-                             :user/created-at t1
                              :user/password "insecure3"})
         (let [[user-id user] (core/authenticate-user-by-password conn "smithj3" "insecure3")]
           (is (not (nil? user-id)))
@@ -315,8 +298,8 @@
           (is (= "smithj@test.com3" (:user/email user)))
           (is (not (nil? (:user/hashed-password user))))
           (is (nil? (:user/deleted-at user)))
-          (is (= t1 (:user/created-at user)))
-          (is (= t1 (:user/updated-at user))))
+          (is (not (nil? (:user/created-at user))))
+          (is (not (nil? (:user/updated-at user)))))
         (let [result (core/authenticate-user-by-password conn "smithj3" "wrong")]
           (is (nil? result))))))
   (testing "Authentication by password with nil inputs"
@@ -333,7 +316,6 @@
                           {:user/username "smithj"
                            :user/email "smithj@test.com"
                            :user/name "John Smith"
-                           :user/created-at t1
                            :user/password "insecure"})
       (let [_ (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))
             plaintext-token (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))
@@ -349,5 +331,5 @@
           (is (= "smithj@test.com" (:user/email user)))
           (is (not (nil? (:user/hashed-password user))))
           (is (nil? (:user/deleted-at user)))
-          (is (= t1 (:user/created-at user)))
-          (is (= t1 (:user/updated-at user))))))))
+          (is (not (nil? (:user/created-at user))))
+          (is (not (nil? (:user/updated-at user)))))))))
