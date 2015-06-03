@@ -60,7 +60,9 @@
     (if (pos? (bit-and validation-mask val/snu-any-issues))
       (throw (IllegalArgumentException. (str validation-mask)))
       (let [password (:user/password user)
-            created-at (c/to-timestamp (t/now))]
+            created-at (t/now)
+            created-at-sql (c/to-timestamp created-at)
+            hashed-password (hash-bcrypt (:user/password user))]
         (try
           (j/insert! db-spec
                      :user_account
@@ -68,10 +70,14 @@
                       :name (:user/name user)
                       :email (:user/email user)
                       :username (:user/username user)
-                      :created_at created-at
-                      :updated_at created-at
+                      :created_at created-at-sql
+                      :updated_at created-at-sql
                       :updated_count 1
-                      :hashed_password (hash-bcrypt (:user/password user))})
+                      :hashed_password hashed-password})
+          (-> user
+              (assoc :user/created-at created-at)
+              (assoc :user/updated-at created-at)
+              (assoc :user/hashed-password hashed-password))
           (catch java.sql.SQLException e
             (if (jcore/uniq-constraint-violated? db-spec e)
               (let [ucv (jcore/uniq-constraint-violated db-spec e)]
@@ -91,15 +97,18 @@
    (save-user db-spec id nil user))
   ([db-spec id auth-token-id user]
    (let [password (:user/password user)
-         updated-at (c/to-timestamp (t/now))]
+         updated-at (t/now)
+         updated-at-sql (c/to-timestamp updated-at)]
      (j/update! db-spec
                 :user_account
-                (-> {:updated_at updated-at}
+                (-> {:updated_at updated-at-sql}
                     (ucore/assoc-if-contains user :user/name :name)
                     (ucore/assoc-if-contains user :user/email :email)
                     (ucore/assoc-if-contains user :user/username :username)
                     (ucore/assoc-if-contains user :user/password :hashed_password hash-bcrypt))
-                ["id = ?" id]))))
+                ["id = ?" id])
+     (-> user
+         (assoc :user/updated-at updated-at)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Loading a user
