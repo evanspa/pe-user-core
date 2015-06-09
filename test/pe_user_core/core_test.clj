@@ -140,7 +140,32 @@
             (is (not (nil? (:user/hashed-password user))))
             (is (nil? (:user/deleted-at user)))
             (is (not (nil? (:user/created-at user))))
-            (is (not (nil? (:user/updated-at user))))))))
+            (is (not (nil? (:user/updated-at user)))))
+          (testing "Attempting to save existing user with invalid email"
+            (try
+              (core/save-user conn new-id2 {:user/email "paul"})
+              (is false "Should not have reached this")
+              (catch IllegalArgumentException e
+                (let [msg-mask (Long/parseLong (.getMessage e))]
+                  (is (pos? (bit-and msg-mask val/su-any-issues)))
+                  (is (zero? (bit-and msg-mask val/su-username-and-email-not-provided)))
+                  (is (zero? (bit-and msg-mask val/su-username-already-registered)))
+                  (is (pos? (bit-and msg-mask val/su-invalid-email)))
+                  (is (zero? (bit-and msg-mask val/su-password-not-provided)))
+                  (is (zero? (bit-and msg-mask val/su-email-already-registered)))))))
+          (testing "Attempting to save existing user with empty email AND username"
+            (try
+              (core/save-user conn new-id2 {:user/email ""
+                                            :user/username ""})
+              (is false "Should not have reached this")
+              (catch IllegalArgumentException e
+                (let [msg-mask (Long/parseLong (.getMessage e))]
+                  (is (pos? (bit-and msg-mask val/su-any-issues)))
+                  (is (pos? (bit-and msg-mask val/su-username-and-email-not-provided)))
+                  (is (zero? (bit-and msg-mask val/su-username-already-registered)))
+                  (is (pos? (bit-and msg-mask val/su-invalid-email)))
+                  (is (zero? (bit-and msg-mask val/su-password-not-provided)))
+                  (is (zero? (bit-and msg-mask val/su-email-already-registered))))))))))
     (testing "Attempting to save a new user with a duplicate username"
       (j/with-db-transaction [conn db-spec]
         (let [new-id (core/next-user-account-id conn)]
@@ -154,11 +179,11 @@
             (is false "Should not have reached this")
             (catch IllegalArgumentException e
               (let [msg-mask (Long/parseLong (.getMessage e))]
-                (is (pos? (bit-and msg-mask val/snu-any-issues)))
-                (is (pos? (bit-and msg-mask val/snu-username-already-registered)))
-                (is (zero? (bit-and msg-mask val/snu-invalid-email)))
-                (is (zero? (bit-and msg-mask val/snu-password-not-provided)))
-                (is (zero? (bit-and msg-mask val/snu-email-already-registered)))))))))
+                (is (pos? (bit-and msg-mask val/su-any-issues)))
+                (is (pos? (bit-and msg-mask val/su-username-already-registered)))
+                (is (zero? (bit-and msg-mask val/su-invalid-email)))
+                (is (zero? (bit-and msg-mask val/su-password-not-provided)))
+                (is (zero? (bit-and msg-mask val/su-email-already-registered)))))))))
     (testing "Attempting to save a new user with a duplicate email address"
       (j/with-db-transaction [conn db-spec]
         (let [new-id (core/next-user-account-id conn)]
@@ -172,11 +197,11 @@
             (is false "Should not have reached this")
             (catch IllegalArgumentException e
               (let [msg-mask (Long/parseLong (.getMessage e))]
-                (is (pos? (bit-and msg-mask val/snu-any-issues)))
-                (is (pos? (bit-and msg-mask val/snu-email-already-registered)))
-                (is (zero? (bit-and msg-mask val/snu-invalid-email)))
-                (is (zero? (bit-and msg-mask val/snu-password-not-provided)))
-                (is (zero? (bit-and msg-mask val/snu-username-already-registered)))))))))
+                (is (pos? (bit-and msg-mask val/su-any-issues)))
+                (is (pos? (bit-and msg-mask val/su-email-already-registered)))
+                (is (zero? (bit-and msg-mask val/su-invalid-email)))
+                (is (zero? (bit-and msg-mask val/su-password-not-provided)))
+                (is (zero? (bit-and msg-mask val/su-username-already-registered)))))))))
     (testing "Attempt to load a non-existent user"
       (is (nil? (core/load-user-by-username db-spec "jacksonm")))
       (is (nil? (core/load-user-by-email db-spec "jacksonm@testing.com"))))

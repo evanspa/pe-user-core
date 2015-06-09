@@ -57,7 +57,7 @@
 (defn save-new-user
   [db-spec new-id user]
   (let [validation-mask (val/save-new-user-validation-mask user)]
-    (if (pos? (bit-and validation-mask val/snu-any-issues))
+    (if (pos? (bit-and validation-mask val/su-any-issues))
       (throw (IllegalArgumentException. (str validation-mask)))
       (let [password (:user/password user)
             created-at (t/now)
@@ -83,12 +83,12 @@
               (let [ucv (jcore/uniq-constraint-violated db-spec e)]
                 (if (= ucv uddl/constr-user-account-uniq-email)
                   (throw (IllegalArgumentException. (str (bit-or 0
-                                                                 val/snu-email-already-registered
-                                                                 val/snu-any-issues))))
+                                                                 val/su-email-already-registered
+                                                                 val/su-any-issues))))
                   (if (= ucv uddl/constr-user-account-uniq-username)
                     (throw (IllegalArgumentException. (str (bit-or 0
-                                                                   val/snu-username-already-registered
-                                                                   val/snu-any-issues))))
+                                                                   val/su-username-already-registered
+                                                                   val/su-any-issues))))
                     (throw e))))
               (throw e))))))))
 
@@ -96,19 +96,22 @@
   ([db-spec id user]
    (save-user db-spec id nil user))
   ([db-spec id auth-token-id user]
-   (let [password (:user/password user)
-         updated-at (t/now)
-         updated-at-sql (c/to-timestamp updated-at)]
-     (j/update! db-spec
-                :user_account
-                (-> {:updated_at updated-at-sql}
-                    (ucore/assoc-if-contains user :user/name :name)
-                    (ucore/assoc-if-contains user :user/email :email)
-                    (ucore/assoc-if-contains user :user/username :username)
-                    (ucore/assoc-if-contains user :user/password :hashed_password hash-bcrypt))
-                ["id = ?" id])
-     (-> user
-         (assoc :user/updated-at updated-at)))))
+   (let [validation-mask (val/save-user-validation-mask user)]
+     (if (pos? (bit-and validation-mask val/su-any-issues))
+       (throw (IllegalArgumentException. (str validation-mask)))
+       (let [password (:user/password user)
+             updated-at (t/now)
+             updated-at-sql (c/to-timestamp updated-at)]
+         (j/update! db-spec
+                    :user_account
+                    (-> {:updated_at updated-at-sql}
+                        (ucore/assoc-if-contains user :user/name :name)
+                        (ucore/assoc-if-contains user :user/email :email)
+                        (ucore/assoc-if-contains user :user/username :username)
+                        (ucore/assoc-if-contains user :user/password :hashed_password hash-bcrypt))
+                    ["id = ?" id])
+         (-> user
+             (assoc :user/updated-at updated-at)))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Loading a user
