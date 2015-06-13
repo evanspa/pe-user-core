@@ -163,9 +163,41 @@
                   (is (pos? (bit-and msg-mask val/su-any-issues)))
                   (is (pos? (bit-and msg-mask val/su-username-and-email-not-provided)))
                   (is (zero? (bit-and msg-mask val/su-username-already-registered)))
-                  (is (pos? (bit-and msg-mask val/su-invalid-email)))
+                  (is (zero? (bit-and msg-mask val/su-invalid-email)))
                   (is (zero? (bit-and msg-mask val/su-password-not-provided)))
-                  (is (zero? (bit-and msg-mask val/su-email-already-registered))))))))))
+                  (is (zero? (bit-and msg-mask val/su-email-already-registered)))))))
+          (testing "Attempting to save existing user with empty email"
+            (core/save-user conn new-id2 {:user/email ""
+                                          :user/username "evanspa"})
+            (let [[user-id user] (core/load-user-by-id conn new-id2)]
+              (is (not (nil? user-id)))
+              (is (not (nil? user)))
+              (is (= new-id2 user-id))
+              (is (= "evanspa" (:user/username user)))
+              (is (= "Paul Evans" (:user/name user)))
+              (is (= new-id2 (:user/id user)))
+              (is (= 2 (:user/updated-count user)))
+              (is (= "" (:user/email user)))
+              (is (not (nil? (:user/hashed-password user))))
+              (is (nil? (:user/deleted-at user)))
+              (is (not (nil? (:user/created-at user))))
+              (is (not (nil? (:user/updated-at user))))))
+          (testing "Attempting to save existing user with nil empty"
+            (core/save-user conn new-id2 {:user/email nil
+                                          :user/username "evanspa"})
+            (let [[user-id user] (core/load-user-by-id conn new-id2)]
+              (is (not (nil? user-id)))
+              (is (not (nil? user)))
+              (is (= new-id2 user-id))
+              (is (= "evanspa" (:user/username user)))
+              (is (= "Paul Evans" (:user/name user)))
+              (is (= new-id2 (:user/id user)))
+              (is (= 3 (:user/updated-count user)))
+              (is (nil? (:user/email user)))
+              (is (not (nil? (:user/hashed-password user))))
+              (is (nil? (:user/deleted-at user)))
+              (is (not (nil? (:user/created-at user))))
+              (is (not (nil? (:user/updated-at user)))))))))
     (testing "Attempting to save a new user with a duplicate username"
       (j/with-db-transaction [conn db-spec]
         (let [new-id (core/next-user-account-id conn)]

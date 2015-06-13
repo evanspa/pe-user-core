@@ -35,7 +35,7 @@ pe-user-core is available from Clojars.  Add the following dependency to your
 `project.clj` file:
 
 ```
-[pe-user-core "0.1.13"]
+[pe-user-core "0.1.14"]
 ```
 
 ## pe-* Clojure Library Suite

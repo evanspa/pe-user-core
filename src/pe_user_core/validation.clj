@@ -49,10 +49,6 @@
                                  (not (is-valid-email? email)))
                            su-invalid-email
                            su-any-issues)
-      (ucore/add-condition #(and (contains? user :user/email)
-                                 (empty? email))
-                           su-invalid-email
-                           su-any-issues)
       (ucore/add-condition #(and (contains? user :user/password)
                                  (empty? password))
                            su-password-not-provided
