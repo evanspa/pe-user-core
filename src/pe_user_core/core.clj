@@ -51,69 +51,6 @@
     (j/insert! conn :schema_version {:schema_version schema-version})))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Saving a user
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(defn save-new-user
-  [db-spec new-id user]
-  (let [validation-mask (val/save-new-user-validation-mask user)]
-    (if (pos? (bit-and validation-mask val/su-any-issues))
-      (throw (IllegalArgumentException. (str validation-mask)))
-      (let [password (:user/password user)
-            created-at (t/now)
-            created-at-sql (c/to-timestamp created-at)
-            hashed-password (hash-bcrypt (:user/password user))]
-        (try
-          (j/insert! db-spec
-                     :user_account
-                     {:id new-id
-                      :name (:user/name user)
-                      :email (:user/email user)
-                      :username (:user/username user)
-                      :created_at created-at-sql
-                      :updated_at created-at-sql
-                      :updated_count 1
-                      :hashed_password hashed-password})
-          (-> user
-              (assoc :user/created-at created-at)
-              (assoc :user/updated-at created-at)
-              (assoc :user/hashed-password hashed-password))
-          (catch java.sql.SQLException e
-            (if (jcore/uniq-constraint-violated? db-spec e)
-              (let [ucv (jcore/uniq-constraint-violated db-spec e)]
-                (if (= ucv uddl/constr-user-account-uniq-email)
-                  (throw (IllegalArgumentException. (str (bit-or 0
-                                                                 val/su-email-already-registered
-                                                                 val/su-any-issues))))
-                  (if (= ucv uddl/constr-user-account-uniq-username)
-                    (throw (IllegalArgumentException. (str (bit-or 0
-                                                                   val/su-username-already-registered
-                                                                   val/su-any-issues))))
-                    (throw e))))
-              (throw e))))))))
-
-(defn save-user
-  ([db-spec id user]
-   (save-user db-spec id nil user))
-  ([db-spec id auth-token-id user]
-   (let [validation-mask (val/save-user-validation-mask user)]
-     (if (pos? (bit-and validation-mask val/su-any-issues))
-       (throw (IllegalArgumentException. (str validation-mask)))
-       (let [password (:user/password user)
-             updated-at (t/now)
-             updated-at-sql (c/to-timestamp updated-at)]
-         (j/update! db-spec
-                    :user_account
-                    (-> {:updated_at updated-at-sql}
-                        (ucore/assoc-if-contains user :user/name :name)
-                        (ucore/assoc-if-contains user :user/email :email)
-                        (ucore/assoc-if-contains user :user/username :username)
-                        (ucore/assoc-if-contains user :user/password :hashed_password hash-bcrypt))
-                    ["id = ?" id])
-         (-> user
-             (assoc :user/updated-at updated-at)))))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Loading a user
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -170,6 +107,83 @@
                            :row-fn :hashed_token)]
     (when (some #(bcrypt-verify plaintext-authtoken %) tokens-rs)
       (load-user-by-id db-spec user-id))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Saving a user
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defn save-new-user
+  [db-spec new-id user]
+  (let [validation-mask (val/save-new-user-validation-mask user)]
+    (if (pos? (bit-and validation-mask val/su-any-issues))
+      (throw (IllegalArgumentException. (str validation-mask)))
+      (let [password (:user/password user)
+            created-at (t/now)
+            created-at-sql (c/to-timestamp created-at)
+            hashed-password (hash-bcrypt (:user/password user))]
+        (try
+          (j/insert! db-spec
+                     :user_account
+                     {:id new-id
+                      :name (:user/name user)
+                      :email (:user/email user)
+                      :username (:user/username user)
+                      :created_at created-at-sql
+                      :updated_at created-at-sql
+                      :updated_count 1
+                      :hashed_password hashed-password})
+          (-> user
+              (assoc :user/created-at created-at)
+              (assoc :user/updated-at created-at)
+              (assoc :user/hashed-password hashed-password))
+          (catch java.sql.SQLException e
+            (if (jcore/uniq-constraint-violated? db-spec e)
+              (let [ucv (jcore/uniq-constraint-violated db-spec e)]
+                (if (= ucv uddl/constr-user-account-uniq-email)
+                  (throw (IllegalArgumentException. (str (bit-or 0
+                                                                 val/su-email-already-registered
+                                                                 val/su-any-issues))))
+                  (if (= ucv uddl/constr-user-account-uniq-username)
+                    (throw (IllegalArgumentException. (str (bit-or 0
+                                                                   val/su-username-already-registered
+                                                                   val/su-any-issues))))
+                    (throw e))))
+              (throw e))))))))
+
+(defn save-user
+  ([db-spec id user]
+   (save-user db-spec id nil user))
+  ([db-spec id auth-token-id user]
+   (save-user db-spec id auth-token-id user nil))
+  ([db-spec id auth-token-id user if-unmodified-since]
+   (let [validation-mask (val/save-user-validation-mask user)]
+     (if (pos? (bit-and validation-mask val/su-any-issues))
+       (throw (IllegalArgumentException. (str validation-mask)))
+       (let [[_ loaded-user] (load-user-by-id db-spec id)]
+         (if (nil? loaded-user)
+           (throw (IllegalArgumentException. (str (bit-or 0
+                                                          val/su-user-does-not-exist
+                                                          val/su-any-issues))))
+           (letfn [(do-user-save []
+                     (let [password (:user/password user)
+                           updated-at (t/now)
+                           updated-at-sql (c/to-timestamp updated-at)]
+                       (j/update! db-spec
+                                  :user_account
+                                  (-> {:updated_at updated-at-sql}
+                                      (ucore/assoc-if-contains user :user/name :name)
+                                      (ucore/assoc-if-contains user :user/email :email)
+                                      (ucore/assoc-if-contains user :user/username :username)
+                                      (ucore/assoc-if-contains user :user/password :hashed_password hash-bcrypt))
+                                  ["id = ?" id])
+                       (-> user
+                           (assoc :user/updated-at updated-at))))]
+             (if (not (nil? if-unmodified-since))
+               (let [loaded-user-updated-at (:user/updated-at loaded-user)]
+                 (if (t/after? loaded-user-updated-at if-unmodified-since)
+                   (throw (ex-info nil {:type :precondition-failed :cause :unmodified-since-check-failed}))
+                   (do-user-save)))
+               (do-user-save)))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Authentication-related

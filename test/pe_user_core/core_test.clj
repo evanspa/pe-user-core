@@ -153,6 +153,27 @@
                   (is (pos? (bit-and msg-mask val/su-invalid-email)))
                   (is (zero? (bit-and msg-mask val/su-password-not-provided)))
                   (is (zero? (bit-and msg-mask val/su-email-already-registered)))))))
+          (testing "Attempting to save existing user with invalid if-unmodified-since value"
+            (try
+              (let [[_ user] (core/load-user-by-id conn new-id2)
+                    if-unmodified-since-val (t/minus (:user/updated-at user) (t/weeks 1))]
+                (core/save-user conn new-id2 nil {:user/name "paul"} if-unmodified-since-val)
+                (is false "Should not have reached this"))
+              (catch clojure.lang.ExceptionInfo e
+                (let [type (-> e ex-data :type)
+                      cause (-> e ex-data :cause)]
+                  (is (= type :precondition-failed))
+                  (is (= cause :unmodified-since-check-failed))))))
+          (testing "Attempting to save existing user with valid if-unmodified-since value"
+            (let [[_ user] (core/load-user-by-id conn new-id2)
+                  current-updated-at-val (:user/updated-at user)
+                  current-updated-count (:user/updated-count user)
+                  if-unmodified-since-val (t/plus current-updated-at-val (t/weeks 1))]
+              (core/save-user conn new-id2 nil {:user/name "Paul Evans"} if-unmodified-since-val)
+              (let [[_ user] (core/load-user-by-id conn new-id2)]
+                (is (= (:user/name user) "Paul Evans"))
+                (is (= (inc current-updated-count) (:user/updated-count user)))
+                (is (t/after? (:user/updated-at user) current-updated-at-val)))))
           (testing "Attempting to save existing user with empty email AND username"
             (try
               (core/save-user conn new-id2 {:user/email ""
@@ -176,7 +197,7 @@
               (is (= "evanspa" (:user/username user)))
               (is (= "Paul Evans" (:user/name user)))
               (is (= new-id2 (:user/id user)))
-              (is (= 2 (:user/updated-count user)))
+              (is (= 3 (:user/updated-count user)))
               (is (= "" (:user/email user)))
               (is (not (nil? (:user/hashed-password user))))
               (is (nil? (:user/deleted-at user)))
@@ -192,7 +213,7 @@
               (is (= "evanspa" (:user/username user)))
               (is (= "Paul Evans" (:user/name user)))
               (is (= new-id2 (:user/id user)))
-              (is (= 3 (:user/updated-count user)))
+              (is (= 4 (:user/updated-count user)))
               (is (nil? (:user/email user)))
               (is (not (nil? (:user/hashed-password user))))
               (is (nil? (:user/deleted-at user)))

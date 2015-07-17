@@ -7,6 +7,7 @@
 (def su-password-not-provided           (bit-shift-left 1 3))
 (def su-email-already-registered        (bit-shift-left 1 4))
 (def su-username-already-registered     (bit-shift-left 1 5))
+(def su-user-does-not-exist             (bit-shift-left 1 6))
 
 (def ^:private email-regex
   #"[a-zA-Z0-9[!#$%&'()*+,/\-_\.\"]]+@[a-zA-Z0-9[!#$%&'()*+,/\-_\"]]+\.[a-zA-Z0-9[!#$%&'()*+,/\-_\"\.]]+")
