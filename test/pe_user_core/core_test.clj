@@ -174,6 +174,13 @@
                 (is (= (:user/name user) "Paul Evans"))
                 (is (= (inc current-updated-count) (:user/updated-count user)))
                 (is (t/after? (:user/updated-at user) current-updated-at-val)))))
+          (testing "Attempting to save existing user with invalid id"
+            (try
+              (core/save-user conn -99 nil {:user/name "Paul Evans"})
+              (is false "Should not have reached this")
+              (catch clojure.lang.ExceptionInfo e
+                (let [cause (-> e ex-data :cause)]
+                  (is (= cause :entity-not-found))))))
           (testing "Attempting to save existing user with empty email AND username"
             (try
               (core/save-user conn new-id2 {:user/email ""

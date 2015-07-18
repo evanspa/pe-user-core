@@ -161,9 +161,7 @@
        (throw (IllegalArgumentException. (str validation-mask)))
        (let [[_ loaded-user] (load-user-by-id db-spec id)]
          (if (nil? loaded-user)
-           (throw (IllegalArgumentException. (str (bit-or 0
-                                                          val/su-user-does-not-exist
-                                                          val/su-any-issues))))
+           (throw (ex-info nil {:cause :entity-not-found}))
            (letfn [(do-user-save []
                      (let [password (:user/password user)
                            updated-at (t/now)
