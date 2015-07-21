@@ -50,6 +50,10 @@
     (j/delete! conn :schema_version [])
     (j/insert! conn :schema_version {:schema_version schema-version})))
 
+(defn load-user-by-col
+  [db-spec col col-val active-only]
+  (jcore/load-entity-by-col db-spec uddl/tbl-user-account col "=" col-val rs->user active-only))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Loading a user
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -57,56 +61,47 @@
 (defn load-user-by-email
   "Loads and returns a user entity given the user's email address.  Returns
    nil if no user is found."
-  [db-spec email]
-  {:pre [(and (not (nil? email))
-              (not (empty? email)))]}
-  (let [user-rs (j/query db-spec
-                         [(format "SELECT * FROM %s WHERE email = ? AND deleted_at is null" uddl/tbl-user-account) email]
-                         :result-set-fn first)]
-    (when user-rs
-      (rs->user user-rs))))
+  ([db-spec email]
+   (load-user-by-email db-spec email true))
+  ([db-spec email active-only]
+   (load-user-by-col db-spec "email" email active-only)))
 
 (defn load-user-by-username
   "Loads and returns a user entity given the user's username.  Returns nil if no
   user is found."
-  [db-spec username]
-  {:pre [(and (not (nil? username))
-              (not (empty? username)))]}
-  (let [user-rs (j/query db-spec
-                         [(format "SELECT * FROM %s WHERE username = ? AND deleted_at is null" uddl/tbl-user-account) username]
-                         :result-set-fn first)]
-    (when user-rs
-      (rs->user user-rs))))
+  ([db-spec username]
+   (load-user-by-username db-spec username true))
+  ([db-spec username active-only]
+   (load-user-by-col db-spec "username" username active-only)))
 
 (defn load-user-by-id
   "Loads and returns a user entity given the user's id.  Returns nil if no user
   is found."
-  [db-spec id]
-  {:pre [(not (nil? id))]}
-  (let [user-rs (j/query db-spec
-                         [(format "SELECT * FROM %s WHERE id = ? AND deleted_at is null" uddl/tbl-user-account) id]
-                         :result-set-fn first)]
-    (when user-rs
-      (rs->user user-rs))))
+  ([db-spec id]
+   (load-user-by-id db-spec id true))
+  ([db-spec id active-only]
+   (load-user-by-col db-spec "id" id active-only)))
 
 (defn load-user-by-authtoken
   "Loads and returns a user entity given an authentication token.  Returns
   nil if no associated user is found."
-  [db-spec user-id plaintext-authtoken]
-  {:pre [(not (nil? plaintext-authtoken))]}
-  (let [tokens-rs (j/query db-spec
-                           [(format (str "SELECT hashed_token "
-                                         "FROM %s "
-                                         "WHERE user_id = ? AND "
-                                         "invalidated_at IS NULL AND "
-                                         "(expires_at IS NULL OR expires_at > ?) "
-                                         "ORDER BY created_at DESC")
-                                    uddl/tbl-auth-token)
-                            user-id
-                            (c/to-timestamp (t/now))]
-                           :row-fn :hashed_token)]
-    (when (some #(bcrypt-verify plaintext-authtoken %) tokens-rs)
-      (load-user-by-id db-spec user-id))))
+  ([db-spec user-id plaintext-authtoken]
+   (load-user-by-authtoken db-spec user-id plaintext-authtoken true))
+  ([db-spec user-id plaintext-authtoken active-only]
+   {:pre [(not (nil? plaintext-authtoken))]}
+   (let [tokens-rs (j/query db-spec
+                            [(format (str "SELECT hashed_token "
+                                          "FROM %s "
+                                          "WHERE user_id = ? AND "
+                                          "invalidated_at IS NULL AND "
+                                          "(expires_at IS NULL OR expires_at > ?) "
+                                          "ORDER BY created_at DESC")
+                                     uddl/tbl-auth-token)
+                             user-id
+                             (c/to-timestamp (t/now))]
+                            :row-fn :hashed_token)]
+     (when (some #(bcrypt-verify plaintext-authtoken %) tokens-rs)
+       (load-user-by-id db-spec user-id active-only)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Saving a user
