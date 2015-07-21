@@ -61,7 +61,7 @@
   {:pre [(and (not (nil? email))
               (not (empty? email)))]}
   (let [user-rs (j/query db-spec
-                         [(format "SELECT * FROM %s WHERE email = ?" uddl/tbl-user-account) email]
+                         [(format "SELECT * FROM %s WHERE email = ? AND deleted_at is null" uddl/tbl-user-account) email]
                          :result-set-fn first)]
     (when user-rs
       (rs->user user-rs))))
@@ -73,7 +73,7 @@
   {:pre [(and (not (nil? username))
               (not (empty? username)))]}
   (let [user-rs (j/query db-spec
-                         [(format "SELECT * FROM %s WHERE username = ?" uddl/tbl-user-account) username]
+                         [(format "SELECT * FROM %s WHERE username = ? AND deleted_at is null" uddl/tbl-user-account) username]
                          :result-set-fn first)]
     (when user-rs
       (rs->user user-rs))))
@@ -84,7 +84,7 @@
   [db-spec id]
   {:pre [(not (nil? id))]}
   (let [user-rs (j/query db-spec
-                         [(format "SELECT * FROM %s WHERE id = ?" uddl/tbl-user-account) id]
+                         [(format "SELECT * FROM %s WHERE id = ? AND deleted_at is null" uddl/tbl-user-account) id]
                          :result-set-fn first)]
     (when user-rs
       (rs->user user-rs))))
