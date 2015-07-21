@@ -17,21 +17,30 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Fixtures
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(use-fixtures :each (fn [f]
-                      (jcore/drop-database db-spec-without-db db-name)
-                      (jcore/create-database db-spec-without-db db-name)
-                      (j/db-do-commands db-spec
-                                        true
-                                        uddl/schema-version-ddl
-                                        uddl/v0-create-user-account-ddl
-                                        uddl/v0-add-unique-constraint-user-account-email
-                                        uddl/v0-add-unique-constraint-user-account-username
-                                        uddl/v0-create-authentication-token-ddl)
-                      (jcore/with-try-catch-exec-as-query db-spec
-                        (uddl/v0-create-updated-count-inc-trigger-function-fn db-spec))
-                      (jcore/with-try-catch-exec-as-query db-spec
-                        (uddl/v0-create-user-account-updated-count-trigger-fn db-spec))
-                      (f)))
+(use-fixtures :each
+  (fn [f]
+    (jcore/drop-database db-spec-without-db db-name)
+    (jcore/create-database db-spec-without-db db-name)
+    (j/db-do-commands db-spec
+                      true
+                      uddl/schema-version-ddl
+                      uddl/v0-create-user-account-ddl
+                      uddl/v0-add-unique-constraint-user-account-email
+                      uddl/v0-add-unique-constraint-user-account-username
+                      uddl/v0-create-authentication-token-ddl
+                      uddl/v1-user-add-deleted-reason-col
+                      uddl/v1-user-add-suspended-at-col
+                      uddl/v1-user-add-suspended-reason-col
+                      uddl/v1-user-add-suspended-count-col)
+    (jcore/with-try-catch-exec-as-query db-spec
+      (uddl/v0-create-updated-count-inc-trigger-fn db-spec))
+    (jcore/with-try-catch-exec-as-query db-spec
+      (uddl/v0-create-user-account-updated-count-trigger-fn db-spec))
+    (jcore/with-try-catch-exec-as-query db-spec
+      (uddl/v1-create-suspended-count-inc-trigger-fn db-spec))
+    (jcore/with-try-catch-exec-as-query db-spec
+      (uddl/v1-create-user-account-suspended-count-trigger-fn db-spec))
+    (f)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Tests
@@ -70,7 +79,10 @@
             (is (not (nil? (:user/hashed-password user))))
             (is (nil? (:user/deleted-at user)))
             (is (not (nil? (:user/created-at user))))
-            (is (not (nil? (:user/updated-at user)))))
+            (is (not (nil? (:user/updated-at user))))
+            (is (nil? (:user/suspended-at user)))
+            (is (= 0 (:user/suspended-count user)))
+            (is (nil? (:user/suspended-reason user))))
           (let [[user-id user] (core/load-user-by-id conn new-id)
                 t2 (t/now)]
             (is (not (nil? user-id)))
@@ -139,6 +151,9 @@
             (is (= "p@p.com" (:user/email user)))
             (is (not (nil? (:user/hashed-password user))))
             (is (nil? (:user/deleted-at user)))
+            (is (nil? (:user/suspended-at user)))
+            (is (= 0 (:user/suspended-count user)))
+            (is (nil? (:user/suspended-reason user)))
             (is (not (nil? (:user/created-at user))))
             (is (not (nil? (:user/updated-at user)))))
           (testing "Attempting to save existing user with invalid email"
@@ -392,29 +407,150 @@
     (is (thrown? AssertionError (core/authenticate-user-by-password db-spec nil nil)))))
 
 (deftest Authenticating-Users-Multiple-Existing-Tokens
-  (let [new-id (core/next-user-account-id db-spec)
-        new-token-id (core/next-auth-token-id db-spec)
-        t1 (t/now)]
-    (j/with-db-transaction [conn db-spec]
-      (core/save-new-user conn
-                          new-id
-                          {:user/username "smithj"
-                           :user/email "smithj@test.com"
-                           :user/name "John Smith"
-                           :user/password "insecure"})
-      (let [_ (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))
-            plaintext-token (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))
-            _ (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))
-            _ (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))]
-        (let [[user-id user] (core/load-user-by-authtoken conn new-id plaintext-token)]
-          (is (not (nil? user-id)))
-          (is (not (nil? user)))
-          (is (= new-id user-id))
-          (is (= "smithj" (:user/username user)))
-          (is (= "John Smith" (:user/name user)))
-          (is (= new-id (:user/id user)))
-          (is (= "smithj@test.com" (:user/email user)))
-          (is (not (nil? (:user/hashed-password user))))
-          (is (nil? (:user/deleted-at user)))
-          (is (not (nil? (:user/created-at user))))
-          (is (not (nil? (:user/updated-at user)))))))))
+  (testing "Authenticating with multiple tokens present"
+    (let [new-id (core/next-user-account-id db-spec)
+          new-token-id (core/next-auth-token-id db-spec)
+          t1 (t/now)]
+      (j/with-db-transaction [conn db-spec]
+        (core/save-new-user conn
+                            new-id
+                            {:user/username "smithj"
+                             :user/email "smithj@test.com"
+                             :user/name "John Smith"
+                             :user/password "insecure"})
+        (let [_ (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))
+              plaintext-token (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))
+              _ (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))
+              _ (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))]
+          (let [[user-id user] (core/load-user-by-authtoken conn new-id plaintext-token)]
+            (is (not (nil? user-id)))
+            (is (not (nil? user)))
+            (is (= new-id user-id))
+            (is (= "smithj" (:user/username user)))
+            (is (= "John Smith" (:user/name user)))
+            (is (= new-id (:user/id user)))
+            (is (= "smithj@test.com" (:user/email user)))
+            (is (not (nil? (:user/hashed-password user))))
+            (is (nil? (:user/deleted-at user)))
+            (is (not (nil? (:user/created-at user))))
+            (is (not (nil? (:user/updated-at user))))))))))
+
+(deftest Suspending-Users
+  (testing "Suspending user accounts"
+    (let [new-id (core/next-user-account-id db-spec)
+          new-token-id (core/next-auth-token-id db-spec)
+          t1 (t/now)]
+      (j/with-db-transaction [conn db-spec]
+        (core/save-new-user conn
+                            new-id
+                            {:user/username "smithj"
+                             :user/email "smithj@test.com"
+                             :user/name "John Smith"
+                             :user/password "insecure"})
+        (let [plaintext-token (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))]
+          (let [[user-id user] (core/load-user-by-authtoken conn new-id plaintext-token)]
+            (is (not (nil? user-id)))
+            (is (not (nil? user)))
+            (is (= new-id user-id))
+            (is (= "smithj" (:user/username user)))
+            (is (= "John Smith" (:user/name user)))
+            (is (= new-id (:user/id user)))
+            (is (= "smithj@test.com" (:user/email user)))
+            (is (not (nil? (:user/hashed-password user))))
+            (is (nil? (:user/deleted-at user)))
+            (is (not (nil? (:user/created-at user))))
+            (is (not (nil? (:user/updated-at user))))
+            (is (= 0 (:user/suspended-count user)))
+            (let [[user-id user :as suspended-user-result] (core/suspend-user conn
+                                                                              user-id
+                                                                              core/sususeracctrsn-testing
+                                                                              (:user/updated-at user))]
+              (is (not (nil? suspended-user-result)))
+              (is (not (nil? (:user/suspended-at user))))
+              (is (= 1 (:user/suspended-count user)))
+              (is (= core/sususeracctrsn-testing (:user/suspended-reason user)))
+              ; suspending an already-suspended account doesn't do much
+              (let [[user-id user :as suspended-user-result] (core/suspend-user conn
+                                                                                user-id
+                                                                                core/sususeracctrsn-nonpayment
+                                                                                (:user/updated-at user))]
+                (is (not (nil? suspended-user-result)))
+                (is (not (nil? (:user/suspended-at user))))
+                (is (= 1 (:user/suspended-count user)))
+                (is (= core/sususeracctrsn-nonpayment (:user/suspended-reason user)))
+                (let [[user-id user :as unsuspended-user-result] (core/unsuspend-user conn
+                                                                                      user-id
+                                                                                      (:user/updated-at user))]
+                  (is (not (nil? unsuspended-user-result)))
+                  (is (nil? (:user/suspended-at user)))
+                  (is (= 1 (:user/suspended-count user)))
+                  (is (nil? (:user/suspended-reason user)))
+                  ; suspend it again to increment the suspend-count
+                  (let [[user-id user :as suspended-user-result] (core/suspend-user conn
+                                                                                    user-id
+                                                                                    core/sususeracctrsn-testing
+                                                                                    (:user/updated-at user))]
+                    (is (not (nil? suspended-user-result)))
+                    (is (not (nil? (:user/suspended-at user))))
+                    (is (= 2 (:user/suspended-count user)))
+                    (is (= core/sususeracctrsn-testing (:user/suspended-reason user)))))))))))))
+
+(deftest Deleting-Users
+  (testing "Deleting user accounts"
+    (let [new-id (core/next-user-account-id db-spec)
+          new-token-id (core/next-auth-token-id db-spec)
+          t1 (t/now)]
+      (j/with-db-transaction [conn db-spec]
+        (core/save-new-user conn
+                            new-id
+                            {:user/username "smithj"
+                             :user/email "smithj@test.com"
+                             :user/name "John Smith"
+                             :user/password "insecure"})
+        (let [plaintext-token (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))]
+          (let [[user-id user] (core/load-user-by-authtoken conn new-id plaintext-token)]
+            (is (not (nil? user-id)))
+            (is (not (nil? user)))
+            (is (= new-id user-id))
+            (is (= "smithj" (:user/username user)))
+            (is (= "John Smith" (:user/name user)))
+            (is (= new-id (:user/id user)))
+            (is (= "smithj@test.com" (:user/email user)))
+            (is (not (nil? (:user/hashed-password user))))
+            (is (nil? (:user/deleted-at user)))
+            (is (not (nil? (:user/created-at user))))
+            (is (not (nil? (:user/updated-at user))))
+            (is (= 0 (:user/suspended-count user)))
+            (let [[user-id user :as deleted-user-result] (core/mark-user-as-deleted conn
+                                                                                    user-id
+                                                                                    core/deluseracctrsn-testing
+                                                                                    (:user/updated-at user))]
+              (is (not (nil? deleted-user-result)))
+              (is (not (nil? (:user/deleted-at user))))
+              (is (= core/deluseracctrsn-testing (:user/deleted-reason user))))
+            (is (nil? (core/load-user-by-id conn user-id)))
+            (is (nil? (core/load-user-by-id conn user-id true)))
+            (let [[user-id user :as deleted-user-result] (core/load-user-by-id conn user-id false)]
+              (is (not (nil? deleted-user-result)))
+              (let [[user-id user :as undeleted-user-result] (core/undelete-user conn
+                                                                                 user-id
+                                                                                 (:user/updated-at user))]
+                (is (not (nil? user-id)))
+                (is (not (nil? user)))
+                (is (= new-id user-id))
+                (is (= "smithj" (:user/username user)))
+                (is (= "John Smith" (:user/name user)))
+                (is (= new-id (:user/id user)))
+                (is (= "smithj@test.com" (:user/email user)))
+                (is (not (nil? (:user/hashed-password user))))
+                (is (nil? (:user/deleted-at user)))
+                (is (not (nil? (:user/created-at user))))
+                (is (not (nil? (:user/updated-at user))))
+                (is (= 0 (:user/suspended-count user)))))
+            (let [loaded-user-result (core/load-user-by-authtoken conn new-id plaintext-token)]
+              ; because when user was marked as deleted, all his auth tokens
+              ; were invalidated
+              (is (nil? loaded-user-result)))
+            (let [[user-id user :as user-result] (core/load-user-by-id conn user-id)]
+              ; because we undeleted the user
+              (is (not (nil? user-result))))))))))

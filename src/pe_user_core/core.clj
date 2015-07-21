@@ -33,8 +33,12 @@
                        (ucore/replace-if-contains :hashed_password :user/hashed-password)
                        (ucore/replace-if-contains :updated_at :user/updated-at from-sql-time-fn)
                        (ucore/replace-if-contains :deleted_at :user/deleted-at from-sql-time-fn)
+                       (ucore/replace-if-contains :deleted_reason :user/deleted-reason)
                        (ucore/replace-if-contains :verified_at :user/verified-at from-sql-time-fn)
-                       (ucore/replace-if-contains :created_at :user/created-at from-sql-time-fn))]))
+                       (ucore/replace-if-contains :created_at :user/created-at from-sql-time-fn)
+                       (ucore/replace-if-contains :suspended_at :user/suspended-at from-sql-time-fn)
+                       (ucore/replace-if-contains :suspended_count :user/suspended-count)
+                       (ucore/replace-if-contains :suspended_reason :user/suspended-reason))]))
 
 (defn get-schema-version
   [db-spec]
@@ -110,7 +114,12 @@
   [[:user/name :name]
    [:user/email :email]
    [:user/username :username]
-   [:user/password :hashed_password hash-bcrypt]])
+   [:user/password :hashed_password hash-bcrypt]
+   [:user/suspended-at :suspended_at c/to-timestamp]
+   [:user/suspended-count :suspended_count 0]
+   [:user/suspended-reason :suspended_reason]
+   [:user/deleted-at :deleted_at c/to-timestamp]
+   [:user/deleted-reason :deleted_reason]])
 
 (def user-uniq-constraints
   [[uddl/constr-user-account-uniq-email val/su-email-already-registered]
@@ -123,6 +132,7 @@
                          user
                          val/save-new-user-validation-mask
                          val/su-any-issues
+                         load-user-by-id
                          :user_account
                          user-key-pairs
                          nil
@@ -159,6 +169,7 @@
 (def invalrsn-account-suspended     2)
 (def invalrsn-admin-individual      3)
 (def invalrsn-admin-mass-comp-event 4)
+(def invalrsn-testing               5)
 
 (defn create-and-save-auth-token
   ([db-spec user-id new-id]
@@ -221,6 +232,18 @@
 
 (def authenticate-user-by-authtoken load-user-by-authtoken)
 
+(defn check-account-suspended
+  [user user-lkup-result]
+  (if (:user/suspended-at user)
+    (throw (ex-info nil {:cause :account-is-suspended}))
+    user-lkup-result))
+
+(defn authenticate-user-by-authtoken
+  [db-spec user-id plaintext-authtoken]
+  (let [[_ user :as result] (load-user-by-authtoken db-spec plaintext-authtoken)]
+    (when result
+      (check-account-suspended user result))))
+
 (defmulti authenticate-user-by-password
   "Authenticates a user given an email address (or username) and password.  Upon
    a successful authentication, returns the associated user entity; otherwise
@@ -238,11 +261,81 @@
   (let [[_ user :as result] (load-user-by-email db-spec email)]
     (when (and user
                (bcrypt-verify plaintext-password (:user/hashed-password user)))
-      result)))
+      (check-account-suspended user result))))
 
 (defmethod authenticate-user-by-password :username
   [db-spec username plaintext-password]
   (let [[_ user :as result] (load-user-by-username db-spec username)]
     (when (and user
                (bcrypt-verify plaintext-password (:user/hashed-password user)))
-      result)))
+      (check-account-suspended user result))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Suspending a user account
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn suspend-user
+  [db-spec user-id reason if-unmodified-since]
+  (let [loaded-user-result
+        (jcore/save-rawmap db-spec
+                           user-id
+                           {uddl/col-suspended-at (c/to-timestamp (t/now))
+                            "suspended_reason" reason}
+                           val/su-any-issues
+                           load-user-by-id
+                           :user_account
+                           :user/updated-at
+                           nil
+                           if-unmodified-since)]
+    (invalidate-user-tokens db-spec user-id invalrsn-account-suspended)
+    loaded-user-result))
+
+(defn unsuspend-user
+  [db-spec user-id if-unmodified-since]
+  (jcore/save-rawmap db-spec
+                     user-id
+                     {uddl/col-suspended-at nil
+                      "suspended_reason" nil}
+                     val/su-any-issues
+                     load-user-by-id
+                     :user_account
+                     :user/updated-at
+                     nil
+                     if-unmodified-since))
+
+(def sususeracctrsn-nonpayment 0)
+(def sususeracctrsn-testing    1)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Closing / deleting a user account
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn mark-user-as-deleted
+  [db-spec user-id reason if-unmodified-since]
+  (let [loaded-user-result
+        (jcore/save-rawmap db-spec
+                           user-id
+                           {"deleted_at" (c/to-timestamp (t/now))
+                            "deleted_reason" reason}
+                           val/su-any-issues
+                           (fn [db-spec user-id] (load-user-by-id db-spec user-id false))
+                           :user_account
+                           :user/updated-at
+                           nil
+                           if-unmodified-since)]
+    (invalidate-user-tokens db-spec user-id invalrsn-account-closed)
+    loaded-user-result))
+
+(defn undelete-user
+  [db-spec user-id if-unmodified-since]
+  (jcore/save-rawmap db-spec
+                     user-id
+                     {"deleted_at" nil
+                      "deleted_reason" nil}
+                     val/su-any-issues
+                     (fn [db-spec user-id] (load-user-by-id db-spec user-id false))
+                     :user_account
+                     :user/updated-at
+                     nil
+                     if-unmodified-since))
+
+(def deluseracctrsn-userinitiated 0)
+(def deluseracctrsn-testing       1)

@@ -33,8 +33,12 @@
                     uddl/v0-create-user-account-ddl
                     uddl/v0-add-unique-constraint-user-account-email
                     uddl/v0-add-unique-constraint-user-account-username
-                    uddl/v0-create-authentication-token-ddl)
+                    uddl/v0-create-authentication-token-ddl
+                    uddl/v1-user-add-deleted-reason-col
+                    uddl/v1-user-add-suspended-at-col
+                    uddl/v1-user-add-suspended-reason-col
+                    uddl/v1-user-add-suspended-count-col)
   (jcore/with-try-catch-exec-as-query db-spec-dev
-    (uddl/v0-create-updated-count-inc-trigger-function-fn db-spec-dev))
+    (uddl/v0-create-updated-count-inc-trigger-fn db-spec))
   (jcore/with-try-catch-exec-as-query db-spec-dev
-    (uddl/v0-create-user-account-updated-count-trigger-fn db-spec-dev)))
+    (uddl/v0-create-user-account-updated-count-trigger-fn db-spec)))
