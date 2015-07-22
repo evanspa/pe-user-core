@@ -41,4 +41,8 @@
   (jcore/with-try-catch-exec-as-query db-spec-dev
     (uddl/v0-create-updated-count-inc-trigger-fn db-spec))
   (jcore/with-try-catch-exec-as-query db-spec-dev
-    (uddl/v0-create-user-account-updated-count-trigger-fn db-spec)))
+    (uddl/v0-create-user-account-updated-count-trigger-fn db-spec))
+  (jcore/with-try-catch-exec-as-query db-spec-dev
+    (uddl/v1-create-suspended-count-inc-trigger-fn db-spec-dev))
+  (jcore/with-try-catch-exec-as-query db-spec-dev
+    (uddl/v1-create-user-account-suspended-count-trigger-fn db-spec-dev)))

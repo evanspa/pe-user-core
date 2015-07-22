@@ -311,16 +311,13 @@
 (defn mark-user-as-deleted
   [db-spec user-id reason if-unmodified-since]
   (let [loaded-user-result
-        (jcore/save-rawmap db-spec
-                           user-id
-                           {"deleted_at" (c/to-timestamp (t/now))
-                            "deleted_reason" reason}
-                           val/su-any-issues
-                           (fn [db-spec user-id] (load-user-by-id db-spec user-id false))
-                           :user_account
-                           :user/updated-at
-                           nil
-                           if-unmodified-since)]
+        (jcore/mark-entity-as-deleted db-spec
+                                      user-id
+                                      load-user-by-id
+                                      :user_account
+                                      :user/updated-at
+                                      if-unmodified-since
+                                      {"deleted_reason" reason})]
     (invalidate-user-tokens db-spec user-id invalrsn-account-closed)
     loaded-user-result))
 
