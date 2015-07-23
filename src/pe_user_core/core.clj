@@ -230,8 +230,6 @@
   [db-spec user-id plaintext-token]
   (invalidate-user-token db-spec user-id plaintext-token invalrsn-logout))
 
-(def authenticate-user-by-authtoken load-user-by-authtoken)
-
 (defn check-account-suspended
   [user user-lkup-result]
   (if (:user/suspended-at user)
@@ -240,7 +238,7 @@
 
 (defn authenticate-user-by-authtoken
   [db-spec user-id plaintext-authtoken]
-  (let [[_ user :as result] (load-user-by-authtoken db-spec plaintext-authtoken)]
+  (let [[_ user :as result] (load-user-by-authtoken db-spec user-id plaintext-authtoken)]
     (when result
       (check-account-suspended user result))))
 
