@@ -171,6 +171,9 @@
 (def invalrsn-admin-mass-comp-event 4)
 (def invalrsn-testing               5)
 
+(def loginfailrsn-account-deleted   0)
+(def loginfailrsn-account-suspended 1)
+
 (defn create-and-save-auth-token
   ([db-spec user-id new-id]
    (create-and-save-auth-token db-spec
@@ -231,16 +234,25 @@
   (invalidate-user-token db-spec user-id plaintext-token invalrsn-logout))
 
 (defn check-account-suspended
-  [user user-lkup-result]
+  [user]
   (if (:user/suspended-at user)
     (throw (ex-info nil {:cause :account-is-suspended}))
-    user-lkup-result))
+    user))
+
+(defn check-account-deleted
+  [user]
+  (if (:user/deleted-at user)
+    (throw (ex-info nil {:cause :account-is-deleted}))
+    user))
 
 (defn authenticate-user-by-authtoken
   [db-spec user-id plaintext-authtoken]
-  (let [[_ user :as result] (load-user-by-authtoken db-spec user-id plaintext-authtoken)]
+  (let [[_ user :as result] (load-user-by-authtoken db-spec user-id plaintext-authtoken false)]
     (when result
-      (check-account-suspended user result))))
+      (-> user
+          (check-account-suspended)
+          (check-account-deleted))
+      result)))
 
 (defmulti authenticate-user-by-password
   "Authenticates a user given an email address (or username) and password.  Upon
@@ -256,17 +268,23 @@
 
 (defmethod authenticate-user-by-password :email
   [db-spec email plaintext-password]
-  (let [[_ user :as result] (load-user-by-email db-spec email)]
+  (let [[_ user :as result] (load-user-by-email db-spec email false)]
     (when (and user
                (bcrypt-verify plaintext-password (:user/hashed-password user)))
-      (check-account-suspended user result))))
+      (-> user
+          (check-account-suspended)
+          (check-account-deleted))
+      result)))
 
 (defmethod authenticate-user-by-password :username
   [db-spec username plaintext-password]
-  (let [[_ user :as result] (load-user-by-username db-spec username)]
+  (let [[_ user :as result] (load-user-by-username db-spec username false)]
     (when (and user
                (bcrypt-verify plaintext-password (:user/hashed-password user)))
-      (check-account-suspended user result))))
+      (-> user
+          (check-account-suspended)
+          (check-account-deleted))
+      result)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Suspending a user account
