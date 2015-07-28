@@ -89,7 +89,7 @@
           col-suspended-at))
 
 (def v1-user-add-suspended-count-col
-  (format "ALTER TABLE %s ADD COLUMN %s integer NOT NULL"
+  (format "ALTER TABLE %s ADD COLUMN %s integer NOT NULL DEFAULT 0"
           tbl-user-account
           col-suspended-count))
 
