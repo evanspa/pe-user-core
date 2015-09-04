@@ -61,6 +61,24 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Loading a user
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(defn load-user-by-id-if-modified-since
+  [db-spec user-id modified-since]
+  (let [{users :entities}
+        (jcore/entities-modified-since db-spec
+                                       uddl/tbl-user-account
+                                       "id"
+                                       "="
+                                       user-id
+                                       "updated_at"
+                                       "deleted_at"
+                                       modified-since
+                                       :user/id
+                                       :user/deleted-at
+                                       :user/updated-at
+                                       rs->user)]
+    (if (> (count users) 0)
+      (first users)
+      nil)))
 
 (defn load-user-by-email
   "Loads and returns a user entity given the user's email address.  Returns

@@ -15,10 +15,10 @@
                  [org.clojure/tools.nrepl "0.2.7"]
                  [com.cemerick/friend "0.2.1"]
                  [pe-core-utils "0.0.11"]
-                 [pe-jdbc-utils "0.0.14"]]
+                 [pe-jdbc-utils "0.0.15"]]
   :resource-paths ["resources"]
   :codox {:exclude [user]
-          :src-dir-uri "https://github.com/evanspa/pe-user-core/blob/0.1.26/"
+          :src-dir-uri "https://github.com/evanspa/pe-user-core/blob/0.1.27/"
           :src-linenum-anchor-prefix "L"}
   :profiles {:dev {:source-paths ["dev"]  ;ensures 'user.clj' gets auto-loaded
                    :plugins [[cider/cider-nrepl "0.10.0-SNAPSHOT"]]
