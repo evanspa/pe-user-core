@@ -521,13 +521,10 @@
             (is (not (nil? (:user/created-at user))))
             (is (not (nil? (:user/updated-at user))))
             (is (= 0 (:user/suspended-count user)))
-            (let [[user-id user :as deleted-user-result] (core/mark-user-as-deleted conn
-                                                                                    user-id
-                                                                                    core/deluseracctrsn-testing
-                                                                                    (:user/updated-at user))]
-              (is (not (nil? deleted-user-result)))
-              (is (not (nil? (:user/deleted-at user))))
-              (is (= core/deluseracctrsn-testing (:user/deleted-reason user))))
+            (core/mark-user-as-deleted conn
+                                       user-id
+                                       core/deluseracctrsn-testing
+                                       (:user/updated-at user))
             (is (nil? (core/load-user-by-id conn user-id)))
             (is (nil? (core/load-user-by-id conn user-id true)))
             (let [[user-id user :as deleted-user-result] (core/load-user-by-id conn user-id false)]

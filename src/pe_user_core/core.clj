@@ -245,7 +245,8 @@
   (j/update! db-spec
              :authentication_token
              {:invalidated_at (c/to-timestamp (t/now))
-              :invalidated_reason reason}))
+              :invalidated_reason reason}
+             nil))
 
 (defn logout-user-token
   [db-spec user-id plaintext-token]
