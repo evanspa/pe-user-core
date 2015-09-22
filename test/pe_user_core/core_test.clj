@@ -31,7 +31,8 @@
                       uddl/v1-user-add-deleted-reason-col
                       uddl/v1-user-add-suspended-at-col
                       uddl/v1-user-add-suspended-reason-col
-                      uddl/v1-user-add-suspended-count-col)
+                      uddl/v1-user-add-suspended-count-col
+                      uddl/v2-create-email-verification-token-ddl)
     (jcore/with-try-catch-exec-as-query db-spec
       (uddl/v0-create-updated-count-inc-trigger-fn db-spec))
     (jcore/with-try-catch-exec-as-query db-spec
@@ -81,6 +82,7 @@
             (is (not (nil? (:user/created-at user))))
             (is (not (nil? (:user/updated-at user))))
             (is (nil? (:user/suspended-at user)))
+            (is (nil? (:user/verified-at user)))
             (is (= 0 (:user/suspended-count user)))
             (is (nil? (:user/suspended-reason user))))
           (let [[user-id user] (core/load-user-by-id conn new-id)
@@ -95,6 +97,7 @@
             (is (= "smithj@test.com" (:user/email user)))
             (is (not (nil? (:user/hashed-password user))))
             (is (nil? (:user/deleted-at user)))
+            (is (nil? (:user/verified-at user)))
             (is (not (nil? (:user/created-at user))))
             (is (not (nil? (:user/updated-at user))))
             (core/save-user conn
@@ -116,6 +119,7 @@
               (is (= "smithj@test.net" (:user/email user)))
               (is (not (nil? (:user/hashed-password user))))
               (is (nil? (:user/deleted-at user)))
+              (is (nil? (:user/verified-at user)))
               (is (not (nil? (:user/created-at user))))
               (is (not (nil? (:user/updated-at user)))))
             (let [new-token-id (core/next-auth-token-id conn)
@@ -151,6 +155,7 @@
             (is (= "p@p.com" (:user/email user)))
             (is (not (nil? (:user/hashed-password user))))
             (is (nil? (:user/deleted-at user)))
+            (is (nil? (:user/flagged-at user)))
             (is (nil? (:user/suspended-at user)))
             (is (= 0 (:user/suspended-count user)))
             (is (nil? (:user/suspended-reason user)))
@@ -223,6 +228,7 @@
               (is (= "" (:user/email user)))
               (is (not (nil? (:user/hashed-password user))))
               (is (nil? (:user/deleted-at user)))
+              (is (nil? (:user/flagged-at user)))
               (is (not (nil? (:user/created-at user))))
               (is (not (nil? (:user/updated-at user))))))
           (testing "Attempting to save existing user with nil empty"
@@ -434,6 +440,70 @@
             (is (nil? (:user/deleted-at user)))
             (is (not (nil? (:user/created-at user))))
             (is (not (nil? (:user/updated-at user))))))))))
+
+(deftest Verifying-Users
+  (testing "Verifying user accounts"
+    (let [new-id (core/next-user-account-id db-spec)
+          new-token-id (core/next-verification-token-id db-spec)
+          t1 (t/now)]
+      (j/with-db-transaction [conn db-spec]
+        (core/save-new-user conn
+                            new-id
+                            {:user/username "smithj"
+                             :user/email "smithj@test.com"
+                             :user/name "John Smith"
+                             :user/password "insecure"})
+        (let [plaintext-token (core/create-and-save-verification-token conn
+                                                                       new-id
+                                                                       new-token-id
+                                                                       "smithj@test.com")]
+          (let [[user-id user] (core/load-user-by-verificationtoken conn new-id plaintext-token)]
+            (is (not (nil? user-id)))
+            (is (not (nil? user)))
+            (is (= new-id user-id))
+            (is (= "smithj" (:user/username user)))
+            (is (= "John Smith" (:user/name user)))
+            (is (= new-id (:user/id user)))
+            (is (= "smithj@test.com" (:user/email user)))
+            (is (not (nil? (:user/hashed-password user))))
+            (is (nil? (:user/deleted-at user)))
+            (is (nil? (:user/flagged-at user)))
+            (is (nil? (:user/verified-at user)))
+            (is (not (nil? (:user/created-at user))))
+            (is (not (nil? (:user/updated-at user))))
+            (is (= 0 (:user/suspended-count user)))
+            (core/verify-user conn user-id plaintext-token)
+            (let [[user-id user] (core/load-user-by-verificationtoken conn new-id plaintext-token)]
+              (is (not (nil? user)))
+              (is (not (nil? (:user/verified-at user)))))))))))
+
+(deftest Flagging-Users
+  (testing "Flagging user accounts"
+    (let [new-id (core/next-user-account-id db-spec)
+          new-token-id (core/next-verification-token-id db-spec)
+          t1 (t/now)]
+      (j/with-db-transaction [conn db-spec]
+        (core/save-new-user conn
+                            new-id
+                            {:user/username "smithj"
+                             :user/email "smithj@test.com"
+                             :user/name "John Smith"
+                             :user/password "insecure"})
+        ; create a bunch of auth tokens
+        (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))
+        (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))
+        (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))
+        (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))
+        (let [plaintext-token (core/create-and-save-verification-token conn
+                                                                       new-id
+                                                                       new-token-id
+                                                                       "smithj@test.com")]
+          (core/flag-verification-token conn new-id plaintext-token)
+          (let [[user-id user :as flagged-user-result] (core/load-user-by-id conn new-id false)]
+            (is (not (nil? flagged-user-result)))
+            (is (not (nil? (:user/suspended-at user))))
+            (is (= 1 (:user/suspended-count user)))
+            (is (= core/sususeracctrsn-flagged-from-verification-email (:user/suspended-reason user)))))))))
 
 (deftest Suspending-Users
   (testing "Suspending user accounts"

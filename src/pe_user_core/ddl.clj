@@ -8,6 +8,7 @@
 (def tbl-schema-version "schema_version")
 (def tbl-user-account "user_account")
 (def tbl-auth-token   "authentication_token")
+(def tbl-account-verification-token "account_verification_token")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Column Names
@@ -28,6 +29,54 @@
 (def schema-version-ddl
   (format "CREATE TABLE IF NOT EXISTS %s (schema_version integer PRIMARY KEY)"
           tbl-schema-version))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Version 2 DDL vars
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(def v2-create-email-verification-token-ddl
+  (str (format "CREATE TABLE IF NOT EXISTS %s (" tbl-account-verification-token)
+       "id              serial      PRIMARY KEY, "
+       (format "user_id integer     NOT NULL REFERENCES %s (id), " tbl-user-account)
+       "sent_to_email   text        NOT NULL, "
+       "hashed_token    text        UNIQUE NOT NULL, "
+       "created_at      timestamptz NOT NULL, "
+       "verified_at     timestamptz NULL, "
+       "expires_at      timestamptz NULL, "
+       "flagged_at      timestamptz NULL)"))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Version 1 DDL vars
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(def v1-user-add-deleted-reason-col
+  (format "ALTER TABLE %s ADD COLUMN deleted_reason integer NULL", tbl-user-account))
+
+(def v1-user-add-suspended-at-col
+  (format "ALTER TABLE %s ADD COLUMN %s timestamptz NULL"
+          tbl-user-account
+          col-suspended-at))
+
+(def v1-user-add-suspended-count-col
+  (format "ALTER TABLE %s ADD COLUMN %s integer NOT NULL DEFAULT 0"
+          tbl-user-account
+          col-suspended-count))
+
+(def v1-user-add-suspended-reason-col
+  (format "ALTER TABLE %s ADD COLUMN suspended_reason integer NULL", tbl-user-account))
+
+(def v1-create-suspended-count-inc-trigger-fn
+  (fn [db-spec]
+    (jcore/auto-inc-trigger-single-non-nil-cond-fn db-spec
+                                                   tbl-user-account
+                                                   col-suspended-count
+                                                   col-suspended-at)))
+
+(def v1-create-user-account-suspended-count-trigger-fn
+  (fn [db-spec]
+    (jcore/auto-inc-trigger db-spec
+                            tbl-user-account
+                            col-suspended-count
+                            (jcore/inc-trigger-fn-name tbl-user-account
+                                                       col-suspended-count))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Version 0 DDL vars
@@ -76,37 +125,3 @@
        "invalidated_at           timestamptz NULL, "
        "invalidated_reason       integer     NULL, "
        "expires_at               timestamptz NULL)"))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Version 1 DDL vars
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(def v1-user-add-deleted-reason-col
-  (format "ALTER TABLE %s ADD COLUMN deleted_reason integer NULL", tbl-user-account))
-
-(def v1-user-add-suspended-at-col
-  (format "ALTER TABLE %s ADD COLUMN %s timestamptz NULL"
-          tbl-user-account
-          col-suspended-at))
-
-(def v1-user-add-suspended-count-col
-  (format "ALTER TABLE %s ADD COLUMN %s integer NOT NULL DEFAULT 0"
-          tbl-user-account
-          col-suspended-count))
-
-(def v1-user-add-suspended-reason-col
-  (format "ALTER TABLE %s ADD COLUMN suspended_reason integer NULL", tbl-user-account))
-
-(def v1-create-suspended-count-inc-trigger-fn
-  (fn [db-spec]
-    (jcore/auto-inc-trigger-single-non-nil-cond-fn db-spec
-                                                   tbl-user-account
-                                                   col-suspended-count
-                                                   col-suspended-at)))
-
-(def v1-create-user-account-suspended-count-trigger-fn
-  (fn [db-spec]
-    (jcore/auto-inc-trigger db-spec
-                            tbl-user-account
-                            col-suspended-count
-                            (jcore/inc-trigger-fn-name tbl-user-account
-                                                       col-suspended-count))))
