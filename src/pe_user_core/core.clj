@@ -56,6 +56,19 @@
                        (ucore/replace-if-contains :suspended_count :user/suspended-count)
                        (ucore/replace-if-contains :suspended_reason :user/suspended-reason))]))
 
+(defn rs->verificationtoken
+  [token-rs]
+  (let [from-sql-time-fn #(c/from-sql-time %)]
+    [(:id token-rs) (-> token-rs
+                        (ucore/replace-if-contains :sent_to_email :veritoken/sent-to-email)
+                        (ucore/replace-if-contains :id :veritoken/id)
+                        (ucore/replace-if-contains :user_id :veritoken/user-id)
+                        (ucore/replace-if-contains :hashed_token :veritoken/hashed-token)
+                        (ucore/replace-if-contains :flagged_at :veritoken/flagged-at from-sql-time-fn)
+                        (ucore/replace-if-contains :verified_at :veritoken/verified-at from-sql-time-fn)
+                        (ucore/replace-if-contains :created_at :veritoken/created-at from-sql-time-fn)
+                        (ucore/replace-if-contains :expires_at :veritoken/expires-at from-sql-time-fn))]))
+
 (defn get-schema-version
   [db-spec]
   (let [rs (j/query db-spec
@@ -266,7 +279,8 @@
             (j/update! db-spec
                        :user_account
                        {:verified_at t1}
-                       ["id = ?" user-id])))))))
+                       ["id = ?" user-id])))
+        user))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Authentication-related
@@ -299,20 +313,12 @@
                  :expires_at (c/to-timestamp exp-date)})
      uuid)))
 
-;; (def verificationtoken-key-pairs
-;;   [[:verificationtkn/sent-to-email :sent_to_email]
-;;    [:verificationtkn/created-at :suspended_at c/to-timestamp]
-;;    [:verificationtkn/suspended-count :suspended_count 0]
-;;    [:user/suspended-reason :suspended_reason]
-;;    [:user/deleted-at :deleted_at c/to-timestamp]
-;;    [:user/deleted-reason :deleted_reason]])
-
 (defn create-and-save-verification-token
   ([db-spec user-id new-id email-address]
    (let [uuid (str (java.util.UUID/randomUUID))
          now (t/now)
          now-sql (c/to-timestamp now)
-         expires-at (t/plus now (t/weeks 2))
+         expires-at nil ;(t/plus now (t/weeks 2))
          expires-at-sql (c/to-timestamp expires-at)]
      (j/insert! db-spec
                 :account_verification_token
