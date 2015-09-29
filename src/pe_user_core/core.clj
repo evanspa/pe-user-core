@@ -260,26 +260,29 @@
 
 (defn verify-user
   [db-spec user-id plaintext-verificationtoken]
-  (let [[_ user :as result] (load-user-by-verificationtoken db-spec
-                                                            user-id
-                                                            plaintext-verificationtoken false)]
-    (when result
+  (let [[_ user :as user-result] (load-user-by-verificationtoken db-spec
+                                                                 user-id
+                                                                 plaintext-verificationtoken false)]
+    (when user-result
       (let [user (-> user
                      (check-account-suspended)
                      (check-account-deleted))
-            verificationtoken (load-verificationtoken-by-plaintext-token db-spec
-                                                                         user-id
-                                                                         plaintext-verificationtoken)]
-        (when verificationtoken
-          (let [t1 (c/to-timestamp (t/now))]
-            (j/update! db-spec
-                       :account_verification_token
-                       {:verified_at t1}
-                       ["id = ?" (:id verificationtoken)])
-            (j/update! db-spec
-                       :user_account
-                       {:verified_at t1}
-                       ["id = ?" user-id])))
+            verificationtoken-rs (load-verificationtoken-by-plaintext-token db-spec
+                                                                            user-id
+                                                                            plaintext-verificationtoken)]
+        (when verificationtoken-rs
+          (when (and (nil? (:verified_at verificationtoken-rs))
+                     (nil? (:flagged_at verificationtoken-rs)))
+            (let [now-sql (c/to-timestamp (t/now))]
+              (j/update! db-spec
+                         :account_verification_token
+                         {:verified_at now-sql}
+                         ["id = ?" (:id verificationtoken-rs)])
+              (j/update! db-spec
+                         :user_account
+                         {:verified_at now-sql
+                          :updated_at now-sql}
+                         ["id = ?" user-id]))))
         user))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
