@@ -456,7 +456,7 @@
         (let [plaintext-token (core/create-and-save-verification-token conn
                                                                        new-id
                                                                        "smithj@test.com")]
-          (let [[user-id user] (core/load-user-by-verification-token conn new-id plaintext-token)]
+          (let [[user-id user] (core/load-user-by-verification-token conn "smithj@test.com" plaintext-token)]
             (is (not (nil? user-id)))
             (is (not (nil? user)))
             (is (= new-id user-id))
@@ -471,8 +471,8 @@
             (is (not (nil? (:user/created-at user))))
             (is (not (nil? (:user/updated-at user))))
             (is (= 0 (:user/suspended-count user)))
-            (core/verify-user conn user-id plaintext-token)
-            (let [[user-id user] (core/load-user-by-verification-token conn new-id plaintext-token)]
+            (core/verify-user conn "smithj@test.com" plaintext-token)
+            (let [[user-id user] (core/load-user-by-verification-token conn "smithj@test.com" plaintext-token)]
               (is (not (nil? user)))
               (is (not (nil? (:user/verified-at user)))))))))))
 
@@ -490,7 +490,7 @@
         (let [plaintext-token (core/create-and-save-password-reset-token conn
                                                                          new-id
                                                                          "smithj@test.com")]
-          (let [[user-id user] (core/load-user-by-password-reset-token conn new-id plaintext-token)]
+          (let [[user-id user] (core/load-user-by-password-reset-token conn "smithj@test.com" plaintext-token)]
             (log/debug "in test, user-0: " user)
             (is (not (nil? user-id)))
             (is (not (nil? user)))
@@ -506,7 +506,7 @@
             (is (not (nil? (:user/created-at user))))
             (is (not (nil? (:user/updated-at user))))
             (is (= 0 (:user/suspended-count user)))
-            (core/reset-password conn user-id plaintext-token "als01nsecure")
+            (core/reset-password conn "smithj@test.com" plaintext-token "als01nsecure")
             (let [user-result (core/authenticate-user-by-password conn "smithj@test.com" "insecure")]
               (is (nil? user-result)))
             (let [[user-id user] (core/authenticate-user-by-password conn "smithj@test.com" "als01nsecure")]

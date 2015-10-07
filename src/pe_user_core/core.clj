@@ -150,44 +150,46 @@
 (defn load-user-by-verification-token
   "Loads and returns a user entity given an verification token.  Returns
   nil if no associated user is found."
-  ([db-spec user-id plaintext-verification-token]
-   (load-user-by-verification-token db-spec user-id plaintext-verification-token true))
-  ([db-spec user-id plaintext-verification-token active-only]
+  ([db-spec email plaintext-verification-token]
+   (load-user-by-verification-token db-spec email plaintext-verification-token true))
+  ([db-spec email plaintext-verification-token active-only]
    {:pre [(not (nil? plaintext-verification-token))]}
    (let [tokens-rs (j/query db-spec
                             [(format (str "SELECT hashed_token "
                                           "FROM %s "
-                                          "WHERE user_id = ? AND "
+                                          "WHERE user_id IN (select id from %s where email = ?) AND "
                                           "flagged_at IS NULL AND "
                                           "(expires_at IS NULL OR expires_at > ?) "
                                           "ORDER BY created_at DESC")
-                                     uddl/tbl-account-verification-token)
-                             user-id
+                                     uddl/tbl-account-verification-token
+                                     uddl/tbl-user-account)
+                             email
                              (c/to-timestamp (t/now))]
                             :row-fn :hashed_token)]
      (when (some #(bcrypt-verify plaintext-verification-token %) tokens-rs)
-       (load-user-by-id db-spec user-id active-only)))))
+       (load-user-by-email db-spec email active-only)))))
 
 (defn load-user-by-password-reset-token
   "Loads and returns a user entity given a password reset token.  Returns
   nil if no associated user is found."
-  ([db-spec user-id plaintext-password-reset-token]
-   (load-user-by-password-reset-token db-spec user-id plaintext-password-reset-token true))
-  ([db-spec user-id plaintext-password-reset-token active-only]
+  ([db-spec email plaintext-password-reset-token]
+   (load-user-by-password-reset-token db-spec email plaintext-password-reset-token true))
+  ([db-spec email plaintext-password-reset-token active-only]
    {:pre [(not (nil? plaintext-password-reset-token))]}
    (let [tokens-rs (j/query db-spec
                             [(format (str "SELECT hashed_token "
                                           "FROM %s "
-                                          "WHERE user_id = ? AND "
+                                          "WHERE user_id IN (select id from %s where email = ?) AND "
                                           "flagged_at IS NULL AND "
                                           "(expires_at IS NULL OR expires_at > ?) "
                                           "ORDER BY created_at DESC")
-                                     uddl/tbl-password-reset-token)
-                             user-id
+                                     uddl/tbl-password-reset-token
+                                     uddl/tbl-user-account)
+                             email
                              (c/to-timestamp (t/now))]
                             :row-fn :hashed_token)]
      (when (some #(bcrypt-verify plaintext-password-reset-token %) tokens-rs)
-       (load-user-by-id db-spec user-id active-only)))))
+       (load-user-by-email db-spec email active-only)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Saving and other user-related operations
@@ -314,7 +316,8 @@
     (when loaded-user-result
       (when (and (nil? (:user/verified-at loaded-user))
                  (not (nil? (:user/email loaded-user))))
-        (let [verification-token (create-and-save-verification-token db-spec
+        (let [email (:user/email loaded-user)
+              verification-token (create-and-save-verification-token db-spec
                                                                      user-id
                                                                      (:user/email loaded-user))]
           (when (not (nil? *smtp-server-host*))
@@ -324,10 +327,8 @@
                                 :to [(:user/email loaded-user)]
                                 :subject subject-line}
                                mustache-template
-                               (merge {:verification-url (verification-url-maker-fn user-id
-                                                                                    verification-token)
-                                       :flagged-url (verification-flagged-url-maker-fn user-id
-                                                                                       verification-token)}
+                               (merge {:verification-url (verification-url-maker-fn email verification-token)
+                                       :flagged-url (verification-flagged-url-maker-fn email verification-token)}
                                       loaded-user)
                                :text/html)))))))))
 
@@ -342,9 +343,7 @@
   (let [[_ loaded-user :as loaded-user-result] (load-user-by-email db-spec email true)]
     (if loaded-user-result
       (let [user-id (:user/id loaded-user)
-            password-reset-token (create-and-save-password-reset-token db-spec
-                                                                       user-id
-                                                                       (:user/email loaded-user))]
+            password-reset-token (create-and-save-password-reset-token db-spec user-id (:user/email loaded-user))]
         (when (not (nil? *smtp-server-host*))
           (with-settings {:host *smtp-server-host*}
             (with-delivery-mode :smtp
@@ -352,8 +351,8 @@
                               :to [email]
                               :subject subject-line}
                              mustache-template
-                             (merge {:password-reset-url (password-reset-url-maker-fn user-id password-reset-token)
-                                     :flagged-url (password-reset-flagged-url-maker-fn user-id password-reset-token)}
+                             (merge {:password-reset-url (password-reset-url-maker-fn email password-reset-token)
+                                     :flagged-url (password-reset-flagged-url-maker-fn email password-reset-token)}
                                     loaded-user)
                              :text/html)))))
       (throw (IllegalArgumentException. (str val/pwd-reset-unknown-email))))))
@@ -378,10 +377,10 @@
                       if-unmodified-since)))
 
 (defn verify-user
-  [db-spec user-id plaintext-verification-token]
-  (let [[_ user :as user-result] (load-user-by-verification-token db-spec
-                                                                  user-id
-                                                                  plaintext-verification-token false)]
+  [db-spec email plaintext-verification-token]
+  (let [[user-id user :as user-result] (load-user-by-verification-token db-spec
+                                                                        email
+                                                                        plaintext-verification-token false)]
     (when user-result
       (let [user (-> user
                      (check-account-suspended)
@@ -405,10 +404,10 @@
         user))))
 
 (defn prepare-password-reset
-  [db-spec user-id plaintext-password-reset-token]
-  (let [[_ user :as user-result] (load-user-by-password-reset-token db-spec
-                                                                    user-id
-                                                                    plaintext-password-reset-token false)]
+  [db-spec email plaintext-password-reset-token]
+  (let [[user-id user :as user-result] (load-user-by-password-reset-token db-spec
+                                                                          email
+                                                                          plaintext-password-reset-token false)]
     (when user-result
       (let [user (-> user
                      (check-account-suspended)
@@ -427,11 +426,11 @@
         user))))
 
 (defn reset-password
-  [db-spec user-id plaintext-password-reset-token new-password]
-  (let [[_ user :as user-result] (load-user-by-password-reset-token db-spec
-                                                                    user-id
-                                                                    plaintext-password-reset-token
-                                                                    false)]
+  [db-spec email plaintext-password-reset-token new-password]
+  (let [[user-id user :as user-result] (load-user-by-password-reset-token db-spec
+                                                                          email
+                                                                          plaintext-password-reset-token
+                                                                          false)]
     (when (and (not (nil? user-result))
                (= user-id (:user/id user)))
       (let [user (-> user
