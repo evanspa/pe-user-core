@@ -32,7 +32,8 @@
                       uddl/v1-user-add-suspended-at-col
                       uddl/v1-user-add-suspended-reason-col
                       uddl/v1-user-add-suspended-count-col
-                      uddl/v2-create-email-verification-token-ddl)
+                      uddl/v2-create-email-verification-token-ddl
+                      uddl/v3-create-password-reset-token-ddl)
     (jcore/with-try-catch-exec-as-query db-spec
       (uddl/v0-create-updated-count-inc-trigger-fn db-spec))
     (jcore/with-try-catch-exec-as-query db-spec
@@ -444,7 +445,6 @@
 (deftest Verifying-Users
   (testing "Verifying user accounts"
     (let [new-id (core/next-user-account-id db-spec)
-          new-token-id (core/next-verification-token-id db-spec)
           t1 (t/now)]
       (j/with-db-transaction [conn db-spec]
         (core/save-new-user conn
@@ -455,9 +455,8 @@
                              :user/password "insecure"})
         (let [plaintext-token (core/create-and-save-verification-token conn
                                                                        new-id
-                                                                       new-token-id
                                                                        "smithj@test.com")]
-          (let [[user-id user] (core/load-user-by-verificationtoken conn new-id plaintext-token)]
+          (let [[user-id user] (core/load-user-by-verification-token conn new-id plaintext-token)]
             (is (not (nil? user-id)))
             (is (not (nil? user)))
             (is (= new-id user-id))
@@ -473,14 +472,55 @@
             (is (not (nil? (:user/updated-at user))))
             (is (= 0 (:user/suspended-count user)))
             (core/verify-user conn user-id plaintext-token)
-            (let [[user-id user] (core/load-user-by-verificationtoken conn new-id plaintext-token)]
+            (let [[user-id user] (core/load-user-by-verification-token conn new-id plaintext-token)]
               (is (not (nil? user)))
               (is (not (nil? (:user/verified-at user)))))))))))
+
+(deftest Password-Reset
+  (testing "Password Reset"
+    (let [new-id (core/next-user-account-id db-spec)
+          t1 (t/now)]
+      (j/with-db-transaction [conn db-spec]
+        (core/save-new-user conn
+                            new-id
+                            {:user/username "smithj"
+                             :user/email "smithj@test.com"
+                             :user/name "John Smith"
+                             :user/password "insecure"})
+        (let [plaintext-token (core/create-and-save-password-reset-token conn
+                                                                         new-id
+                                                                         "smithj@test.com")]
+          (let [[user-id user] (core/load-user-by-password-reset-token conn new-id plaintext-token)]
+            (log/debug "in test, user-0: " user)
+            (is (not (nil? user-id)))
+            (is (not (nil? user)))
+            (is (= new-id user-id))
+            (is (= "smithj" (:user/username user)))
+            (is (= "John Smith" (:user/name user)))
+            (is (= new-id (:user/id user)))
+            (is (= "smithj@test.com" (:user/email user)))
+            (is (not (nil? (:user/hashed-password user))))
+            (is (nil? (:user/deleted-at user)))
+            (is (nil? (:user/flagged-at user)))
+            (is (nil? (:user/verified-at user)))
+            (is (not (nil? (:user/created-at user))))
+            (is (not (nil? (:user/updated-at user))))
+            (is (= 0 (:user/suspended-count user)))
+            (core/reset-password conn user-id plaintext-token "als01nsecure")
+            (let [user-result (core/authenticate-user-by-password conn "smithj@test.com" "insecure")]
+              (is (nil? user-result)))
+            (let [[user-id user] (core/authenticate-user-by-password conn "smithj@test.com" "als01nsecure")]
+              (is (not (nil? user)))
+              (is (= new-id user-id))
+              (is (= "smithj" (:user/username user)))
+              (is (= "John Smith" (:user/name user)))
+              (is (= new-id (:user/id user)))
+              (is (= "smithj@test.com" (:user/email user)))
+              (is (not (nil? (:user/hashed-password user)))))))))))
 
 (deftest Flagging-Users
   (testing "Flagging user accounts"
     (let [new-id (core/next-user-account-id db-spec)
-          new-token-id (core/next-verification-token-id db-spec)
           t1 (t/now)]
       (j/with-db-transaction [conn db-spec]
         (core/save-new-user conn
@@ -496,7 +536,6 @@
         (core/create-and-save-auth-token conn new-id (core/next-auth-token-id db-spec))
         (let [plaintext-token (core/create-and-save-verification-token conn
                                                                        new-id
-                                                                       new-token-id
                                                                        "smithj@test.com")]
           (core/flag-verification-token conn new-id plaintext-token)
           (let [[user-id user :as flagged-user-result] (core/load-user-by-id conn new-id false)]

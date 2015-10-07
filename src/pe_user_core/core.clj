@@ -17,8 +17,10 @@
 
 (declare check-account-deleted)
 (declare check-account-suspended)
-(declare load-verificationtoken-by-plaintext-token)
+(declare load-verification-token-by-plaintext-token)
+(declare load-password-reset-token-by-plaintext-token)
 (declare create-and-save-verification-token)
+(declare create-and-save-password-reset-token)
 
 (def ^:dynamic *smtp-server-host* nil)
 
@@ -36,6 +38,10 @@
 (defn next-verification-token-id
   [db-spec]
   (jcore/seq-next-val db-spec "account_verification_token_id_seq"))
+
+(defn next-password-reset-token-id
+  [db-spec]
+  (jcore/seq-next-val db-spec "password_reset_token_id_seq"))
 
 (defn rs->user
   [user-rs]
@@ -55,19 +61,6 @@
                        (ucore/replace-if-contains :suspended_at :user/suspended-at from-sql-time-fn)
                        (ucore/replace-if-contains :suspended_count :user/suspended-count)
                        (ucore/replace-if-contains :suspended_reason :user/suspended-reason))]))
-
-(defn rs->verificationtoken
-  [token-rs]
-  (let [from-sql-time-fn #(c/from-sql-time %)]
-    [(:id token-rs) (-> token-rs
-                        (ucore/replace-if-contains :sent_to_email :veritoken/sent-to-email)
-                        (ucore/replace-if-contains :id :veritoken/id)
-                        (ucore/replace-if-contains :user_id :veritoken/user-id)
-                        (ucore/replace-if-contains :hashed_token :veritoken/hashed-token)
-                        (ucore/replace-if-contains :flagged_at :veritoken/flagged-at from-sql-time-fn)
-                        (ucore/replace-if-contains :verified_at :veritoken/verified-at from-sql-time-fn)
-                        (ucore/replace-if-contains :created_at :veritoken/created-at from-sql-time-fn)
-                        (ucore/replace-if-contains :expires_at :veritoken/expires-at from-sql-time-fn))]))
 
 (defn get-schema-version
   [db-spec]
@@ -154,13 +147,13 @@
      (when (some #(bcrypt-verify plaintext-authtoken %) tokens-rs)
        (load-user-by-id db-spec user-id active-only)))))
 
-(defn load-user-by-verificationtoken
+(defn load-user-by-verification-token
   "Loads and returns a user entity given an verification token.  Returns
   nil if no associated user is found."
-  ([db-spec user-id plaintext-verificationtoken]
-   (load-user-by-verificationtoken db-spec user-id plaintext-verificationtoken true))
-  ([db-spec user-id plaintext-verificationtoken active-only]
-   {:pre [(not (nil? plaintext-verificationtoken))]}
+  ([db-spec user-id plaintext-verification-token]
+   (load-user-by-verification-token db-spec user-id plaintext-verification-token true))
+  ([db-spec user-id plaintext-verification-token active-only]
+   {:pre [(not (nil? plaintext-verification-token))]}
    (let [tokens-rs (j/query db-spec
                             [(format (str "SELECT hashed_token "
                                           "FROM %s "
@@ -172,12 +165,47 @@
                              user-id
                              (c/to-timestamp (t/now))]
                             :row-fn :hashed_token)]
-     (when (some #(bcrypt-verify plaintext-verificationtoken %) tokens-rs)
+     (when (some #(bcrypt-verify plaintext-verification-token %) tokens-rs)
+       (load-user-by-id db-spec user-id active-only)))))
+
+(defn load-user-by-password-reset-token
+  "Loads and returns a user entity given a password reset token.  Returns
+  nil if no associated user is found."
+  ([db-spec user-id plaintext-password-reset-token]
+   (load-user-by-password-reset-token db-spec user-id plaintext-password-reset-token true))
+  ([db-spec user-id plaintext-password-reset-token active-only]
+   {:pre [(not (nil? plaintext-password-reset-token))]}
+   (let [tokens-rs (j/query db-spec
+                            [(format (str "SELECT hashed_token "
+                                          "FROM %s "
+                                          "WHERE user_id = ? AND "
+                                          "flagged_at IS NULL AND "
+                                          "(expires_at IS NULL OR expires_at > ?) "
+                                          "ORDER BY created_at DESC")
+                                     uddl/tbl-password-reset-token)
+                             user-id
+                             (c/to-timestamp (t/now))]
+                            :row-fn :hashed_token)]
+     (when (some #(bcrypt-verify plaintext-password-reset-token %) tokens-rs)
        (load-user-by-id db-spec user-id active-only)))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Saving a user
+;; Saving and other user-related operations
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+(def invalrsn-logout                                  0)
+(def invalrsn-account-closed                          1)
+(def invalrsn-account-suspended                       2)
+(def invalrsn-admin-individual                        3)
+(def invalrsn-admin-mass-comp-event                   4)
+(def invalrsn-testing                                 5)
+(def invalrsn-account-flagged-from-verification-email 6)
+(def invalrsn-password-reset                          7)
+
+(def loginfailrsn-account-deleted   0)
+(def loginfailrsn-account-suspended 1)
+
 (def user-key-pairs
   [[:user/name :name]
    [:user/email :email]
@@ -193,156 +221,22 @@
   [[uddl/constr-user-account-uniq-email val/su-email-already-registered]
    [uddl/constr-user-account-uniq-username val/su-username-already-registered]])
 
-(defn save-new-user
-  [db-spec new-id user]
-  (jcore/save-new-entity db-spec
-                         new-id
-                         user
-                         val/save-new-user-validation-mask
-                         val/su-any-issues
-                         load-user-by-id
-                         :user_account
-                         user-key-pairs
-                         nil
-                         :user/created-at
-                         :user/updated-at
-                         user-uniq-constraints
-                         nil))
-
-(defn send-verification-notice
-  [db-spec
-   user-id
-   mustache-template
-   subject-line
-   from
-   verification-url-maker-fn
-   flagged-url-maker-fn]
-  (let [[_ loaded-user :as loaded-user-result] (load-user-by-id db-spec user-id true)]
-    (when loaded-user-result
-      (when (and (nil? (:user/verified-at loaded-user))
-                 (not (nil? (:user/email loaded-user))))
-        (let [verification-token (create-and-save-verification-token db-spec
-                                                                     user-id
-                                                                     (next-verification-token-id db-spec)
-                                                                     (:user/email loaded-user))]
-          (when (not (nil? *smtp-server-host*))
-            (with-settings {:host *smtp-server-host*}
-              (with-delivery-mode :smtp
-                (deliver-email {:from from,
-                                :to [(:user/email loaded-user)]
-                                :subject subject-line}
-                               mustache-template
-                               (merge {:verification-url (verification-url-maker-fn user-id
-                                                                                    verification-token)
-                                       :flagged-url (flagged-url-maker-fn user-id
-                                                                          verification-token)}
-                                      loaded-user)
-                               :text/html)))))))))
-
-(defn save-user
-  ([db-spec id user]
-   (save-user db-spec id nil user))
-  ([db-spec id auth-token-id user]
-   (save-user db-spec id auth-token-id user nil))
-  ([db-spec id auth-token-id user if-unmodified-since]
-   (jcore/save-entity db-spec
-                      id
-                      user
-                      val/save-user-validation-mask
-                      val/su-any-issues
-                      load-user-by-id
-                      :user_account
-                      user-key-pairs
-                      :user/updated-at
-                      user-uniq-constraints
-                      nil
-                      if-unmodified-since)))
-
-(defn verify-user
-  [db-spec user-id plaintext-verificationtoken]
-  (let [[_ user :as user-result] (load-user-by-verificationtoken db-spec
-                                                                 user-id
-                                                                 plaintext-verificationtoken false)]
-    (when user-result
-      (let [user (-> user
-                     (check-account-suspended)
-                     (check-account-deleted))
-            verificationtoken-rs (load-verificationtoken-by-plaintext-token db-spec
-                                                                            user-id
-                                                                            plaintext-verificationtoken)]
-        (when verificationtoken-rs
-          (when (and (nil? (:verified_at verificationtoken-rs))
-                     (nil? (:flagged_at verificationtoken-rs)))
-            (let [now-sql (c/to-timestamp (t/now))]
-              (j/update! db-spec
-                         :account_verification_token
-                         {:verified_at now-sql}
-                         ["id = ?" (:id verificationtoken-rs)])
-              (j/update! db-spec
-                         :user_account
-                         {:verified_at now-sql
-                          :updated_at now-sql}
-                         ["id = ?" user-id]))))
-        user))))
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; Authentication-related
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(def invalrsn-logout                                  0)
-(def invalrsn-account-closed                          1)
-(def invalrsn-account-suspended                       2)
-(def invalrsn-admin-individual                        3)
-(def invalrsn-admin-mass-comp-event                   4)
-(def invalrsn-testing                                 5)
-(def invalrsn-account-flagged-from-verification-email 6)
-
-(def loginfailrsn-account-deleted   0)
-(def loginfailrsn-account-suspended 1)
-
-(defn create-and-save-auth-token
-  ([db-spec user-id new-id]
-   (create-and-save-auth-token db-spec
-                               user-id
-                               new-id
-                               nil))
-  ([db-spec user-id new-id exp-date]
-   (let [uuid (str (java.util.UUID/randomUUID))]
-     (j/insert! db-spec
-                :authentication_token
-                {:id new-id
-                 :user_id user-id
-                 :hashed_token (hash-bcrypt uuid)
-                 :created_at (c/to-timestamp (t/now))
-                 :expires_at (c/to-timestamp exp-date)})
-     uuid)))
-
-(defn create-and-save-verification-token
-  ([db-spec user-id new-id email-address]
-   (let [uuid (str (java.util.UUID/randomUUID))
-         now (t/now)
-         now-sql (c/to-timestamp now)
-         expires-at nil ;(t/plus now (t/weeks 2))
-         expires-at-sql (c/to-timestamp expires-at)]
-     (j/insert! db-spec
-                :account_verification_token
-                {:id new-id
-                 :user_id user-id
-                 :sent_to_email email-address
-                 :hashed_token (hash-bcrypt uuid)
-                 :created_at now-sql
-                 :expires_at expires-at-sql})
-     uuid)))
-
 (defn load-authtokens-by-user-id
   [db-spec user-id]
   (j/query db-spec
            [(format "select * from %s where user_id = ?" uddl/tbl-auth-token)
             user-id]))
 
-(defn load-verificationtokens-by-user-id
+(defn load-verification-tokens-by-user-id
   [db-spec user-id]
   (j/query db-spec
            [(format "select * from %s where user_id = ?" uddl/tbl-account-verification-token)
+            user-id]))
+
+(defn load-password-reset-tokens-by-user-id
+  [db-spec user-id]
+  (j/query db-spec
+           [(format "select * from %s where user_id = ?" uddl/tbl-password-reset-token)
             user-id]))
 
 (defn load-authtoken-by-plaintext-token
@@ -350,9 +244,14 @@
   (let [tokens (load-authtokens-by-user-id db-spec user-id)]
     (some #(when (bcrypt-verify plaintext-token (:hashed_token %)) %) tokens)))
 
-(defn load-verificationtoken-by-plaintext-token
+(defn load-verification-token-by-plaintext-token
   [db-spec user-id plaintext-token]
-  (let [tokens (load-verificationtokens-by-user-id db-spec user-id)]
+  (let [tokens (load-verification-tokens-by-user-id db-spec user-id)]
+    (some #(when (bcrypt-verify plaintext-token (:hashed_token %)) %) tokens)))
+
+(defn load-password-reset-token-by-plaintext-token
+  [db-spec user-id plaintext-token]
+  (let [tokens (load-password-reset-tokens-by-user-id db-spec user-id)]
     (some #(when (bcrypt-verify plaintext-token (:hashed_token %)) %) tokens)))
 
 (defn invalidate-user-token
@@ -386,6 +285,225 @@
 (defn logout-user-token
   [db-spec user-id plaintext-token]
   (invalidate-user-token db-spec user-id plaintext-token invalrsn-logout))
+
+(defn save-new-user
+  [db-spec new-id user]
+  (jcore/save-new-entity db-spec
+                         new-id
+                         user
+                         val/save-new-user-validation-mask
+                         val/su-any-issues
+                         load-user-by-id
+                         :user_account
+                         user-key-pairs
+                         nil
+                         :user/created-at
+                         :user/updated-at
+                         user-uniq-constraints
+                         nil))
+
+(defn send-verification-notice
+  [db-spec
+   user-id
+   mustache-template
+   subject-line
+   from
+   verification-url-maker-fn
+   verification-flagged-url-maker-fn]
+  (let [[_ loaded-user :as loaded-user-result] (load-user-by-id db-spec user-id true)]
+    (when loaded-user-result
+      (when (and (nil? (:user/verified-at loaded-user))
+                 (not (nil? (:user/email loaded-user))))
+        (let [verification-token (create-and-save-verification-token db-spec
+                                                                     user-id
+                                                                     (:user/email loaded-user))]
+          (when (not (nil? *smtp-server-host*))
+            (with-settings {:host *smtp-server-host*}
+              (with-delivery-mode :smtp
+                (deliver-email {:from from,
+                                :to [(:user/email loaded-user)]
+                                :subject subject-line}
+                               mustache-template
+                               (merge {:verification-url (verification-url-maker-fn user-id
+                                                                                    verification-token)
+                                       :flagged-url (verification-flagged-url-maker-fn user-id
+                                                                                       verification-token)}
+                                      loaded-user)
+                               :text/html)))))))))
+
+(defn send-password-reset-notice
+  [db-spec
+   email
+   mustache-template
+   subject-line
+   from
+   password-reset-url-maker-fn
+   password-reset-flagged-url-maker-fn]
+  (let [[_ loaded-user :as loaded-user-result] (load-user-by-email db-spec email true)]
+    (if loaded-user-result
+      (let [user-id (:user/id loaded-user)
+            password-reset-token (create-and-save-password-reset-token db-spec
+                                                                       user-id
+                                                                       (:user/email loaded-user))]
+        (when (not (nil? *smtp-server-host*))
+          (with-settings {:host *smtp-server-host*}
+            (with-delivery-mode :smtp
+              (deliver-email {:from from,
+                              :to [email]
+                              :subject subject-line}
+                             mustache-template
+                             (merge {:password-reset-url (password-reset-url-maker-fn user-id password-reset-token)
+                                     :flagged-url (password-reset-flagged-url-maker-fn user-id password-reset-token)}
+                                    loaded-user)
+                             :text/html)))))
+      (throw (IllegalArgumentException. (str val/pwd-reset-unknown-email))))))
+
+(defn save-user
+  ([db-spec id user]
+   (save-user db-spec id nil user))
+  ([db-spec id auth-token-id user]
+   (save-user db-spec id auth-token-id user nil))
+  ([db-spec id auth-token-id user if-unmodified-since]
+   (jcore/save-entity db-spec
+                      id
+                      user
+                      val/save-user-validation-mask
+                      val/su-any-issues
+                      load-user-by-id
+                      :user_account
+                      user-key-pairs
+                      :user/updated-at
+                      user-uniq-constraints
+                      nil
+                      if-unmodified-since)))
+
+(defn verify-user
+  [db-spec user-id plaintext-verification-token]
+  (let [[_ user :as user-result] (load-user-by-verification-token db-spec
+                                                                  user-id
+                                                                  plaintext-verification-token false)]
+    (when user-result
+      (let [user (-> user
+                     (check-account-suspended)
+                     (check-account-deleted))
+            verification-token-rs (load-verification-token-by-plaintext-token db-spec
+                                                                              user-id
+                                                                              plaintext-verification-token)]
+        (when verification-token-rs
+          (when (and (nil? (:verified_at verification-token-rs))
+                     (nil? (:flagged_at verification-token-rs)))
+            (let [now-sql (c/to-timestamp (t/now))]
+              (j/update! db-spec
+                         :account_verification_token
+                         {:verified_at now-sql}
+                         ["id = ?" (:id verification-token-rs)])
+              (j/update! db-spec
+                         :user_account
+                         {:verified_at now-sql
+                          :updated_at now-sql}
+                         ["id = ?" user-id]))))
+        user))))
+
+(defn prepare-password-reset
+  [db-spec user-id plaintext-password-reset-token]
+  (let [[_ user :as user-result] (load-user-by-password-reset-token db-spec
+                                                                    user-id
+                                                                    plaintext-password-reset-token false)]
+    (when user-result
+      (let [user (-> user
+                     (check-account-suspended)
+                     (check-account-deleted))
+            token-rs (load-password-reset-token-by-plaintext-token db-spec
+                                                                   user-id
+                                                                   plaintext-password-reset-token)]
+        (when token-rs
+          (when (and (nil? (:accessed_at token-rs))
+                     (nil? (:flagged_at token-rs)))
+            (let [now-sql (c/to-timestamp (t/now))]
+              (j/update! db-spec
+                         :password_reset_token
+                         {:accessed_at now-sql}
+                         ["id = ?" (:id token-rs)]))))
+        user))))
+
+(defn reset-password
+  [db-spec user-id plaintext-password-reset-token new-password]
+  (let [[_ user :as user-result] (load-user-by-password-reset-token db-spec
+                                                                    user-id
+                                                                    plaintext-password-reset-token
+                                                                    false)]
+    (when (and (not (nil? user-result))
+               (= user-id (:user/id user)))
+      (let [user (-> user
+                     (check-account-suspended)
+                     (check-account-deleted))
+            password-reset-token-rs (load-password-reset-token-by-plaintext-token db-spec
+                                                                                  user-id
+                                                                                  plaintext-password-reset-token)]
+        (if password-reset-token-rs
+          (if (and (nil? (:accessed_at password-reset-token-rs))
+                   (nil? (:flagged_at password-reset-token-rs)))
+            (let [now-sql (c/to-timestamp (t/now))]
+              (j/update! db-spec
+                         :password_reset_token
+                         {:accessed_at now-sql}
+                         ["id = ?" (:id password-reset-token-rs)])
+              (save-user db-spec user-id {:user/password new-password})
+              (invalidate-user-tokens db-spec user-id invalrsn-password-reset))
+            (throw (ex-info nil {:cause :password-reset-token-already-used})))
+          (throw (ex-info nil {:cause :password-reset-token-lookup-error})))
+        user))))
+
+(defn create-and-save-auth-token
+  ([db-spec user-id new-id]
+   (create-and-save-auth-token db-spec
+                               user-id
+                               new-id
+                               nil))
+  ([db-spec user-id new-id exp-date]
+   (let [uuid (str (java.util.UUID/randomUUID))]
+     (j/insert! db-spec
+                :authentication_token
+                {:id new-id
+                 :user_id user-id
+                 :hashed_token (hash-bcrypt uuid)
+                 :created_at (c/to-timestamp (t/now))
+                 :expires_at (c/to-timestamp exp-date)})
+     uuid)))
+
+(defn create-and-save-verification-token
+  ([db-spec user-id email-address]
+   (let [uuid (str (java.util.UUID/randomUUID))
+         now (t/now)
+         now-sql (c/to-timestamp now)
+         expires-at nil ;(t/plus now (t/weeks 2))
+         expires-at-sql (c/to-timestamp expires-at)]
+     (j/insert! db-spec
+                :account_verification_token
+                {:id (next-verification-token-id db-spec)
+                 :user_id user-id
+                 :sent_to_email email-address
+                 :hashed_token (hash-bcrypt uuid)
+                 :created_at now-sql
+                 :expires_at expires-at-sql})
+     uuid)))
+
+(defn create-and-save-password-reset-token
+  [db-spec user-id email-address]
+  (let [uuid (str (java.util.UUID/randomUUID))
+        now (t/now)
+        now-sql (c/to-timestamp now)
+        expires-at nil ;(t/plus now (t/weeks 2))
+        expires-at-sql (c/to-timestamp expires-at)]
+    (j/insert! db-spec
+               :password_reset_token
+               {:id (next-password-reset-token-id db-spec)
+                :user_id user-id
+                :sent_to_email email-address
+                :hashed_token (hash-bcrypt uuid)
+                :created_at now-sql
+                :expires_at expires-at-sql})
+    uuid))
 
 (defn check-account-suspended
   [user]
@@ -481,7 +599,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
  (defn flag-verification-token
   [db-spec user-id plaintext-token]
-  (let [token (load-verificationtoken-by-plaintext-token db-spec
+  (let [token (load-verification-token-by-plaintext-token db-spec
                                                          user-id
                                                          plaintext-token)]
     (when token

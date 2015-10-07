@@ -8,6 +8,9 @@
 (def su-email-already-registered        (bit-shift-left 1 4))
 (def su-username-already-registered     (bit-shift-left 1 5))
 
+(def pwd-reset-any-issues   (bit-shift-left 1 0))
+(def pwd-reset-unknown-email (bit-shift-left 1 1))
+
 (def ^:private email-regex
   #"[a-zA-Z0-9[!#$%&'()*+,/\-_\.\"]]+@[a-zA-Z0-9[!#$%&'()*+,/\-_\"]]+\.[a-zA-Z0-9[!#$%&'()*+,/\-_\"\.]]+")
 

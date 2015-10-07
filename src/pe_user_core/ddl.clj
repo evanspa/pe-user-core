@@ -9,6 +9,7 @@
 (def tbl-user-account "user_account")
 (def tbl-auth-token   "authentication_token")
 (def tbl-account-verification-token "account_verification_token")
+(def tbl-password-reset-token "password_reset_token")
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Column Names
@@ -29,6 +30,20 @@
 (def schema-version-ddl
   (format "CREATE TABLE IF NOT EXISTS %s (schema_version integer PRIMARY KEY)"
           tbl-schema-version))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Version 3 DDL vars
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+(def v3-create-password-reset-token-ddl
+  (str (format "CREATE TABLE IF NOT EXISTS %s (" tbl-password-reset-token)
+       "id              serial      PRIMARY KEY, "
+       (format "user_id integer     NOT NULL REFERENCES %s (id), " tbl-user-account)
+       "sent_to_email   text        NOT NULL, "
+       "hashed_token    text        UNIQUE NOT NULL, "
+       "created_at      timestamptz NOT NULL, "
+       "accessed_at     timestamptz NULL, "
+       "expires_at      timestamptz NULL, "
+       "flagged_at      timestamptz NULL)"))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Version 2 DDL vars
