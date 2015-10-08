@@ -506,6 +506,7 @@
             (is (not (nil? (:user/created-at user))))
             (is (not (nil? (:user/updated-at user))))
             (is (= 0 (:user/suspended-count user)))
+            (core/prepare-password-reset conn "smithj@test.com" plaintext-token)
             (core/reset-password conn "smithj@test.com" plaintext-token "als01nsecure")
             (let [user-result (core/authenticate-user-by-password conn "smithj@test.com" "insecure")]
               (is (nil? user-result)))
