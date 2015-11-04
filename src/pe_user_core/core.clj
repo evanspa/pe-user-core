@@ -191,6 +191,17 @@
      (when (some #(bcrypt-verify plaintext-password-reset-token %) tokens-rs)
        (load-user-by-email db-spec email active-only)))))
 
+(defn users
+  ([db-spec]
+   (users db-spec true))
+  ([db-spec active-only]
+   (jcore/load-entities db-spec
+                        uddl/tbl-user-account
+                        "updated_at"
+                        "desc"
+                        rs->user
+                        active-only)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Saving and other user-related operations
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -320,7 +331,7 @@
               verification-token (create-and-save-verification-token db-spec
                                                                      user-id
                                                                      (:user/email loaded-user))]
-          ;(log/debug "verification url: " (verification-url-maker-fn email verification-token))
+          (log/debug "verification url: " (verification-url-maker-fn email verification-token))
           (when (not (nil? *smtp-server-host*))
             (with-settings {:host *smtp-server-host*}
               (with-delivery-mode :smtp
@@ -345,7 +356,7 @@
     (if loaded-user-result
       (let [user-id (:user/id loaded-user)
             password-reset-token (create-and-save-password-reset-token db-spec user-id (:user/email loaded-user))]
-        ;(log/debug "password reset url: " (password-reset-url-maker-fn email password-reset-token))
+        (log/debug "password reset url: " (password-reset-url-maker-fn email password-reset-token))
         (when (not (nil? *smtp-server-host*))
           (with-settings {:host *smtp-server-host*}
             (with-delivery-mode :smtp

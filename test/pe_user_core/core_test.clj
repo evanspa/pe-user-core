@@ -661,3 +661,51 @@
             (let [[user-id user :as user-result] (core/load-user-by-id conn user-id)]
               ; because we undeleted the user
               (is (not (nil? user-result))))))))))
+
+(deftest Loading-Users
+  (testing "Loading user accounts"
+    (let [new-id (core/next-user-account-id db-spec)
+          new-id-2 (core/next-user-account-id db-spec)
+          new-token-id (core/next-auth-token-id db-spec)
+          t1 (t/now)]
+      (j/with-db-transaction [conn db-spec]
+        (core/save-new-user conn
+                            new-id
+                            {:user/username "smithj"
+                             :user/email "smithj@test.com"
+                             :user/name "John Smith"
+                             :user/password "insecure"})
+        (core/save-new-user conn
+                            new-id-2
+                            {:user/username "paulsmith"
+                             :user/email "paulsmith@test.com"
+                             :user/name "Paul Smith"
+                             :user/password "insecure"})
+        (let [all-users (core/users conn)]
+          (is (= 2 (count all-users)))
+          (let [[user-id user] (first all-users)]
+            (is (not (nil? user-id)))
+            (is (not (nil? user)))
+            (is (= new-id-2 user-id))
+            (is (= "paulsmith" (:user/username user)))
+            (is (= "Paul Smith" (:user/name user)))
+            (is (= new-id-2 (:user/id user)))
+            (is (= "paulsmith@test.com" (:user/email user)))
+            (is (not (nil? (:user/hashed-password user))))
+            (is (nil? (:user/deleted-at user)))
+            (is (not (nil? (:user/created-at user))))
+            (is (not (nil? (:user/updated-at user))))
+            (is (= 0 (:user/suspended-count user))))
+          (let [[user-id user] (second all-users)]
+            (is (not (nil? user-id)))
+            (is (not (nil? user)))
+            (is (= new-id user-id))
+            (is (= "smithj" (:user/username user)))
+            (is (= "John Smith" (:user/name user)))
+            (is (= new-id (:user/id user)))
+            (is (= "smithj@test.com" (:user/email user)))
+            (is (not (nil? (:user/hashed-password user))))
+            (is (nil? (:user/deleted-at user)))
+            (is (not (nil? (:user/created-at user))))
+            (is (not (nil? (:user/updated-at user))))
+            (is (= 0 (:user/suspended-count user)))))))))
