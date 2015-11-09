@@ -237,19 +237,21 @@
 (defn load-authtokens-by-user-id
   [db-spec user-id]
   (j/query db-spec
-           [(format "select * from %s where user_id = ?" uddl/tbl-auth-token)
+           [(format "select * from %s where user_id = ? and invalidated_at is null" uddl/tbl-auth-token)
             user-id]))
 
 (defn load-verification-tokens-by-user-id
   [db-spec user-id]
   (j/query db-spec
-           [(format "select * from %s where user_id = ?" uddl/tbl-account-verification-token)
+           [(format "select * from %s where user_id = ? and verified_at is null and expires_at is null and flagged_at is null"
+                    uddl/tbl-account-verification-token)
             user-id]))
 
 (defn load-password-reset-tokens-by-user-id
   [db-spec user-id]
   (j/query db-spec
-           [(format "select * from %s where user_id = ?" uddl/tbl-password-reset-token)
+           [(format "select * from %s where user_id = ? and expires_at is null and flagged_at is null"
+                    uddl/tbl-password-reset-token)
             user-id]))
 
 (defn load-authtoken-by-plaintext-token

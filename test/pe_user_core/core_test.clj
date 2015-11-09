@@ -491,7 +491,6 @@
                                                                          new-id
                                                                          "smithj@test.com")]
           (let [[user-id user] (core/load-user-by-password-reset-token conn "smithj@test.com" plaintext-token)]
-            (log/debug "in test, user-0: " user)
             (is (not (nil? user-id)))
             (is (not (nil? user)))
             (is (= new-id user-id))
