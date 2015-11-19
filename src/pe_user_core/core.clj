@@ -317,6 +317,22 @@
                          user-uniq-constraints
                          nil))
 
+(defn send-email
+  [mustache-template
+   data
+   subject-line
+   from
+   to]
+  (when (not (nil? *smtp-server-host*))
+    (with-settings {:host *smtp-server-host*}
+      (with-delivery-mode :smtp
+        (deliver-email {:from from,
+                        :to [to]
+                        :subject subject-line}
+                       mustache-template
+                       data
+                       :text/html)))))
+
 (defn send-verification-notice
   [db-spec
    user-id
@@ -333,18 +349,13 @@
               verification-token (create-and-save-verification-token db-spec
                                                                      user-id
                                                                      (:user/email loaded-user))]
-          (log/debug "verification url: " (verification-url-maker-fn email verification-token))
-          (when (not (nil? *smtp-server-host*))
-            (with-settings {:host *smtp-server-host*}
-              (with-delivery-mode :smtp
-                (deliver-email {:from from,
-                                :to [(:user/email loaded-user)]
-                                :subject subject-line}
-                               mustache-template
-                               (merge {:verification-url (verification-url-maker-fn email verification-token)
-                                       :flagged-url (verification-flagged-url-maker-fn email verification-token)}
-                                      loaded-user)
-                               :text/html)))))))))
+          (send-email mustache-template
+                      (merge {:verification-url (verification-url-maker-fn email verification-token)
+                              :flagged-url (verification-flagged-url-maker-fn email verification-token)}
+                             loaded-user)
+                      subject-line
+                      from
+                      (:user/email loaded-user)))))))
 
 (defn send-password-reset-notice
   [db-spec
@@ -358,18 +369,13 @@
     (if loaded-user-result
       (let [user-id (:user/id loaded-user)
             password-reset-token (create-and-save-password-reset-token db-spec user-id (:user/email loaded-user))]
-        (log/debug "password reset url: " (password-reset-url-maker-fn email password-reset-token))
-        (when (not (nil? *smtp-server-host*))
-          (with-settings {:host *smtp-server-host*}
-            (with-delivery-mode :smtp
-              (deliver-email {:from from,
-                              :to [email]
-                              :subject subject-line}
-                             mustache-template
-                             (merge {:password-reset-url (password-reset-url-maker-fn email password-reset-token)
-                                     :flagged-url (password-reset-flagged-url-maker-fn email password-reset-token)}
-                                    loaded-user)
-                             :text/html)))))
+        (send-email mustache-template
+                    (merge {:password-reset-url (password-reset-url-maker-fn email password-reset-token)
+                            :flagged-url (password-reset-flagged-url-maker-fn email password-reset-token)}
+                           loaded-user)
+                    subject-line
+                    from
+                    email))
       (throw (IllegalArgumentException. (str val/pwd-reset-unknown-email))))))
 
 (defn save-user
