@@ -16,10 +16,10 @@
                  [com.cemerick/friend "0.2.1"]
                  [clojurewerkz/mailer "1.2.0"]
                  [pe-core-utils "0.0.11"]
-                 [pe-jdbc-utils "0.0.18"]]
+                 [pe-jdbc-utils "0.0.19"]]
   :resource-paths ["resources"]
   :codox {:exclude [user]
-          :src-dir-uri "https://github.com/evanspa/pe-user-core/blob/0.1.38/"
+          :src-dir-uri "https://github.com/evanspa/pe-user-core/blob/0.1.39/"
           :src-linenum-anchor-prefix "L"}
   :profiles {:dev {:source-paths ["dev"]  ;ensures 'user.clj' gets auto-loaded
                    :plugins [[cider/cider-nrepl "0.10.0-SNAPSHOT"]]
