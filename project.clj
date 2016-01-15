@@ -1,4 +1,4 @@
-(defproject pe-user-core "0.1.39"
+(defproject pe-user-core "0.1.40-SNAPSHOT"
   :description "A Clojure library encapsulating an abstraction modeling a user."
   :url "https://github.com/evanspa/pe-user-core"
   :license {:name "MIT"
