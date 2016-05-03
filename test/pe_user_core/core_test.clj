@@ -23,17 +23,17 @@
     (jcore/create-database db-spec-without-db db-name)
     (j/db-do-commands db-spec
                       true
-                      uddl/schema-version-ddl
-                      uddl/v0-create-user-account-ddl
-                      uddl/v0-add-unique-constraint-user-account-email
-                      uddl/v0-add-unique-constraint-user-account-username
-                      uddl/v0-create-authentication-token-ddl
-                      uddl/v1-user-add-deleted-reason-col
-                      uddl/v1-user-add-suspended-at-col
-                      uddl/v1-user-add-suspended-reason-col
-                      uddl/v1-user-add-suspended-count-col
-                      uddl/v2-create-email-verification-token-ddl
-                      uddl/v3-create-password-reset-token-ddl)
+                      [uddl/schema-version-ddl
+                       uddl/v0-create-user-account-ddl
+                       uddl/v0-add-unique-constraint-user-account-email
+                       uddl/v0-add-unique-constraint-user-account-username
+                       uddl/v0-create-authentication-token-ddl
+                       uddl/v1-user-add-deleted-reason-col
+                       uddl/v1-user-add-suspended-at-col
+                       uddl/v1-user-add-suspended-reason-col
+                       uddl/v1-user-add-suspended-count-col
+                       uddl/v2-create-email-verification-token-ddl
+                       uddl/v3-create-password-reset-token-ddl])
     (jcore/with-try-catch-exec-as-query db-spec
       (uddl/v0-create-updated-count-inc-trigger-fn db-spec))
     (jcore/with-try-catch-exec-as-query db-spec
@@ -331,7 +331,7 @@
             (is (= 1 (first ret)))
             (let [token-rs (j/query conn
                                   [(format "SELECT * from %s where id = ?" uddl/tbl-auth-token) new-token-id]
-                                  :result-set-fn first)]
+                                  {:result-set-fn first})]
               (is (not (nil? token-rs)))
               (is (= new-token-id (:id token-rs)))
               (is (not (nil? (:created_at token-rs))))
@@ -350,7 +350,7 @@
                                                                t1)]
           (let [token-rs (j/query conn
                                   [(format "SELECT * from %s where id = ?" uddl/tbl-auth-token) new-token-id]
-                                  :result-set-fn first)]
+                                  {:result-set-fn first})]
             (is (not (nil? token-rs)))
             (is (= new-token-id (:id token-rs)))
             (is (= new-id (:user_id token-rs)))

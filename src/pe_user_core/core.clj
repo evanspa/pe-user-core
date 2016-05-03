@@ -66,7 +66,7 @@
   [db-spec]
   (let [rs (j/query db-spec
                     [(format "select schema_version from %s" uddl/tbl-schema-version)]
-                    :result-set-fn first)]
+                    {:result-set-fn first})]
     (when rs
       (:schema_version rs))))
 
@@ -143,7 +143,7 @@
                                      uddl/tbl-auth-token)
                              user-id
                              (c/to-timestamp (t/now))]
-                            :row-fn :hashed_token)]
+                            {:row-fn :hashed_token})]
      (when (some #(bcrypt-verify plaintext-authtoken %) tokens-rs)
        (load-user-by-id db-spec user-id active-only)))))
 
@@ -165,7 +165,7 @@
                                      uddl/tbl-user-account)
                              email
                              (c/to-timestamp (t/now))]
-                            :row-fn :hashed_token)]
+                            {:row-fn :hashed_token})]
      (when (some #(bcrypt-verify plaintext-verification-token %) tokens-rs)
        (load-user-by-email db-spec email active-only)))))
 
@@ -187,7 +187,7 @@
                                      uddl/tbl-user-account)
                              email
                              (c/to-timestamp (t/now))]
-                            :row-fn :hashed_token)]
+                            {:row-fn :hashed_token})]
      (when (some #(bcrypt-verify plaintext-password-reset-token %) tokens-rs)
        (load-user-by-email db-spec email active-only)))))
 
