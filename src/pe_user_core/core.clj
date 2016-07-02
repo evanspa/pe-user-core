@@ -179,14 +179,11 @@
    (let [tokens-rs (j/query db-spec
                             [(format (str "SELECT hashed_token "
                                           "FROM %s "
-                                          "WHERE user_id IN (select id from %s where email = ?) AND "
-                                          "flagged_at IS NULL AND "
-                                          "(expires_at IS NULL OR expires_at > ?) "
+                                          "WHERE user_id IN (select id from %s where email = ?) "
                                           "ORDER BY created_at DESC")
                                      uddl/tbl-password-reset-token
                                      uddl/tbl-user-account)
-                             email
-                             (c/to-timestamp (t/now))]
+                             email]
                             {:row-fn :hashed_token})]
      (when (some #(bcrypt-verify plaintext-password-reset-token %) tokens-rs)
        (load-user-by-email db-spec email active-only)))))
@@ -250,8 +247,7 @@
 (defn load-password-reset-tokens-by-user-id
   [db-spec user-id]
   (j/query db-spec
-           [(format "select * from %s where user_id = ? and expires_at is null and flagged_at is null"
-                    uddl/tbl-password-reset-token)
+           [(format "select * from %s where user_id = ?" uddl/tbl-password-reset-token)
             user-id]))
 
 (defn load-authtoken-by-plaintext-token
@@ -348,9 +344,11 @@
         (let [email (:user/email loaded-user)
               verification-token (create-and-save-verification-token db-spec
                                                                      user-id
-                                                                     (:user/email loaded-user))]
+                                                                     (:user/email loaded-user))
+              verification-url (verification-url-maker-fn email verification-token)]
+          (log/debug "verification email sent to: [" email "], verification-url: [" verification-url "]")
           (send-email mustache-template
-                      (merge {:verification-url (verification-url-maker-fn email verification-token)
+                      (merge {:verification-url verification-url
                               :flagged-url (verification-flagged-url-maker-fn email verification-token)}
                              loaded-user)
                       subject-line
@@ -368,9 +366,11 @@
   (let [[_ loaded-user :as loaded-user-result] (load-user-by-email db-spec email true)]
     (if loaded-user-result
       (let [user-id (:user/id loaded-user)
-            password-reset-token (create-and-save-password-reset-token db-spec user-id (:user/email loaded-user))]
+            password-reset-token (create-and-save-password-reset-token db-spec user-id (:user/email loaded-user))
+            password-reset-url (password-reset-url-maker-fn email password-reset-token)]
+        (log/debug "password-reset-url: [" password-reset-url "]")
         (send-email mustache-template
-                    (merge {:password-reset-url (password-reset-url-maker-fn email password-reset-token)
+                    (merge {:password-reset-url password-reset-url
                             :flagged-url (password-reset-flagged-url-maker-fn email password-reset-token)}
                            loaded-user)
                     subject-line
@@ -424,6 +424,24 @@
                          ["id = ?" user-id]))))
         user))))
 
+(defn- do-action-on-password-reset-token
+  [password-reset-token-rs should-be-prepared-already action-fn]
+  (if password-reset-token-rs
+    (if (or (not should-be-prepared-already)
+            (not (nil? (:accessed_at password-reset-token-rs))))
+      (if (nil? (:used_at password-reset-token-rs))
+        (if (nil? (:flagged_at password-reset-token-rs))
+          (let [expires-at (c/from-sql-time (:expires_at password-reset-token-rs))]
+            (if (not (nil? expires-at))
+              (if (t/after? expires-at (t/now))
+                (action-fn)
+                (throw (IllegalArgumentException. (str val/pwd-reset-token-expired))))
+              (action-fn)))
+          (throw (IllegalArgumentException. (str val/pwd-reset-token-flagged))))
+        (throw (IllegalArgumentException. (str val/pwd-reset-token-already-used))))
+      (throw (IllegalArgumentException. (str val/pwd-reset-token-not-prepared))))
+    (throw (IllegalArgumentException. (str val/pwd-reset-token-not-found)))))
+
 (defn prepare-password-reset
   [db-spec email plaintext-password-reset-token]
   (let [[user-id user :as user-result] (load-user-by-password-reset-token db-spec
@@ -433,17 +451,18 @@
       (let [user (-> user
                      (check-account-suspended)
                      (check-account-deleted))
-            token-rs (load-password-reset-token-by-plaintext-token db-spec
+            password-reset-token-rs (load-password-reset-token-by-plaintext-token db-spec
                                                                    user-id
                                                                    plaintext-password-reset-token)]
-        (when token-rs
-          (when (and (nil? (:accessed_at token-rs))
-                     (nil? (:flagged_at token-rs)))
-            (let [now-sql (c/to-timestamp (t/now))]
-              (j/update! db-spec
-                         :password_reset_token
-                         {:accessed_at now-sql}
-                         ["id = ?" (:id token-rs)]))))
+        (letfn [(do-prepare-password-reset []
+                  (let [now-sql (c/to-timestamp (t/now))]
+                    (j/update! db-spec
+                               :password_reset_token
+                               {:accessed_at now-sql}
+                               ["id = ?" (:id password-reset-token-rs)])))]
+          (do-action-on-password-reset-token password-reset-token-rs
+                                             false
+                                             do-prepare-password-reset))
         user))))
 
 (defn reset-password
@@ -452,7 +471,7 @@
                                                                           email
                                                                           plaintext-password-reset-token
                                                                           false)]
-    (when (and (not (nil? user-result))
+    (if (and (not (nil? user-result))
                (= user-id (:user/id user)))
       (let [user (-> user
                      (check-account-suspended)
@@ -460,19 +479,19 @@
             password-reset-token-rs (load-password-reset-token-by-plaintext-token db-spec
                                                                                   user-id
                                                                                   plaintext-password-reset-token)]
-        (if password-reset-token-rs
-          (if (and (not (nil? (:accessed_at password-reset-token-rs)))
-                   (nil? (:flagged_at password-reset-token-rs)))
-            (let [now-sql (c/to-timestamp (t/now))]
-              (j/update! db-spec
-                         :password_reset_token
-                         {:accessed_at now-sql}
-                         ["id = ?" (:id password-reset-token-rs)])
-              (save-user db-spec user-id {:user/password new-password})
-              (invalidate-user-tokens db-spec user-id invalrsn-password-reset))
-            (throw (ex-info nil {:cause :password-reset-token-already-used})))
-          (throw (ex-info nil {:cause :password-reset-token-lookup-error})))
-        user))))
+        (letfn [(do-reset-password []
+                  (let [now-sql (c/to-timestamp (t/now))]
+                    (j/update! db-spec
+                               :password_reset_token
+                               {:used_at now-sql}
+                               ["id = ?" (:id password-reset-token-rs)])
+                    (save-user db-spec user-id {:user/password new-password})
+                    (invalidate-user-tokens db-spec user-id invalrsn-password-reset)))]
+          (do-action-on-password-reset-token password-reset-token-rs
+                                             true
+                                             do-reset-password))
+        user)
+      (throw (IllegalArgumentException. (str val/pwd-reset-token-not-found))))))
 
 (defn create-and-save-auth-token
   ([db-spec user-id new-id]
@@ -513,7 +532,7 @@
   (let [uuid (str (java.util.UUID/randomUUID))
         now (t/now)
         now-sql (c/to-timestamp now)
-        expires-at nil ;(t/plus now (t/weeks 2))
+        expires-at (t/plus now (t/weeks 1))
         expires-at-sql (c/to-timestamp expires-at)]
     (j/insert! db-spec
                :password_reset_token

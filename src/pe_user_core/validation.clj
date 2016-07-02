@@ -8,8 +8,13 @@
 (def su-email-already-registered        (bit-shift-left 1 4))
 (def su-username-already-registered     (bit-shift-left 1 5))
 
-(def pwd-reset-any-issues   (bit-shift-left 1 0))
-(def pwd-reset-unknown-email (bit-shift-left 1 1))
+(def pwd-reset-any-issues         (bit-shift-left 1 0))
+(def pwd-reset-unknown-email      (bit-shift-left 1 1))
+(def pwd-reset-token-not-found    (bit-shift-left 1 2))
+(def pwd-reset-token-flagged      (bit-shift-left 1 3))
+(def pwd-reset-token-expired      (bit-shift-left 1 4))
+(def pwd-reset-token-already-used (bit-shift-left 1 5))
+(def pwd-reset-token-not-prepared (bit-shift-left 1 6))
 
 (def ^:private email-regex
   #"[a-zA-Z0-9[!#$%&'()*+,/\-_\.\"]]+@[a-zA-Z0-9[!#$%&'()*+,/\-_\"]]+\.[a-zA-Z0-9[!#$%&'()*+,/\-_\"\.]]+")

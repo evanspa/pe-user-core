@@ -33,7 +33,8 @@
                        uddl/v1-user-add-suspended-reason-col
                        uddl/v1-user-add-suspended-count-col
                        uddl/v2-create-email-verification-token-ddl
-                       uddl/v3-create-password-reset-token-ddl])
+                       uddl/v3-create-password-reset-token-ddl
+                       uddl/v4-password-reset-token-add-used-at-col])
     (jcore/with-try-catch-exec-as-query db-spec
       (uddl/v0-create-updated-count-inc-trigger-fn db-spec))
     (jcore/with-try-catch-exec-as-query db-spec
