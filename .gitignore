@@ -7,3 +7,4 @@ target
 .nrepl-port
 pom.xml.asc
 doc
+pe-user-core.ddl.html
