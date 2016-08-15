@@ -319,15 +319,30 @@
    subject-line
    from
    to]
+  (log/info "inside pe-user-core.core/send-email, *smtp-server-host*: " *smtp-server-host*)
   (when (not (nil? *smtp-server-host*))
-    (with-settings {:host *smtp-server-host*}
-      (with-delivery-mode :smtp
-        (deliver-email {:from from,
-                        :to [to]
-                        :subject subject-line}
-                       mustache-template
-                       data
-                       :text/html)))))
+    (try
+      (with-settings {:host *smtp-server-host*}
+        (with-delivery-mode :smtp
+          (deliver-email {:from from,
+                          :to [to]
+                          :subject subject-line}
+                         mustache-template
+                         data
+                         :text/html)
+          (log/info (str "inside pe-user-core.core/send-email, 'deliver-email' called successfully.  *smtp-server-host*: " *smtp-server-host*
+                         ", mustache-template: " mustache-template
+                         ", data: " data
+                         ", subject-line: " subject-line
+                         ", from: " from
+                         ", to: " to))))
+      (catch Exception e
+        (log/error e (str "Exception caught in pe-user-core.core/send-email. *smtp-server-host*: " *smtp-server-host*
+                          ", mustache-template: " mustache-template
+                          ", data: " data
+                          ", subject-line: " subject-line
+                          ", from: " from
+                          ", to: " to))))))
 
 (defn send-verification-notice
   [db-spec
