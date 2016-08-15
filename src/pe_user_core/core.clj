@@ -319,7 +319,7 @@
    subject-line
    from
    to]
-  (log/info "inside pe-user-core.core/send-email, *smtp-server-host*: " *smtp-server-host*)
+  (log/debug "inside pe-user-core.core/send-email, *smtp-server-host*: " *smtp-server-host*)
   (when (not (nil? *smtp-server-host*))
     (try
       (with-settings {:host *smtp-server-host*}
@@ -330,12 +330,12 @@
                          mustache-template
                          data
                          :text/html)
-          (log/info (str "inside pe-user-core.core/send-email, 'deliver-email' called successfully.  *smtp-server-host*: " *smtp-server-host*
-                         ", mustache-template: " mustache-template
-                         ", data: " data
-                         ", subject-line: " subject-line
-                         ", from: " from
-                         ", to: " to))))
+          (log/debug (str "inside pe-user-core.core/send-email, 'deliver-email' called successfully.  *smtp-server-host*: " *smtp-server-host*
+                          ", mustache-template: " mustache-template
+                          ", data: " data
+                          ", subject-line: " subject-line
+                          ", from: " from
+                          ", to: " to))))
       (catch Exception e
         (log/error e (str "Exception caught in pe-user-core.core/send-email. *smtp-server-host*: " *smtp-server-host*
                           ", mustache-template: " mustache-template
